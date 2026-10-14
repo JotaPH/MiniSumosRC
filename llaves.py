@@ -315,6 +315,17 @@ def actualizar_llaves_tras_resultado():
     cursor = conexion.cursor()
     try:
         cursor.execute("""
+            CREATE TABLE IF NOT EXISTS llaves (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ronda TEXT NOT NULL,
+                posicion INTEGER NOT NULL,
+                participante1 INTEGER,
+                participante2 INTEGER,
+                ganador INTEGER,
+                estado TEXT DEFAULT 'Pendiente'
+            )
+        """)
+        cursor.execute("""
             SELECT COUNT(*)
             FROM enfrentamientos
             WHERE etapa IN ('Grupo', 'Todos')
