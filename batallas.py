@@ -6,6 +6,7 @@ from tkinter import ttk
 from serial.tools import list_ports
 
 from .esp32 import esp32
+from .llaves import actualizar_llaves_tras_resultado
 
 
 # ============================================================
@@ -390,6 +391,10 @@ def registrar_resultado(
 
     conexion.commit()
     conexion.close()
+
+    # Al guardar un resultado, comprobar si terminó la fase inicial
+    # o si ya se puede crear la siguiente ronda eliminatoria.
+    actualizar_llaves_tras_resultado()
 
 
 # ============================================================
