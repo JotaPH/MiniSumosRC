@@ -844,129 +844,6 @@ def mostrar_enfrentamientos(contenedor):
         fill="y"
     )
 
-    # ========================================================
-    # CONFIGURAR TABLA SEGÚN LA CANTIDAD
-    # ========================================================
-
-    def configurar_columnas(cantidad):
-
-        tabla.delete(*tabla.get_children())
-
-        if cantidad >= 6:
-
-            columnas = (
-                "ID",
-                "Grupo",
-                "Robot 1",
-                "Robot 2",
-                "Estado"
-            )
-
-            tabla["columns"] = columnas
-
-            encabezados = {
-                "ID": "ID",
-                "Grupo": "GRUPO",
-                "Robot 1": "ROBOT 1",
-                "Robot 2": "ROBOT 2",
-                "Estado": "ESTADO"
-            }
-
-            for columna, texto in encabezados.items():
-
-                tabla.heading(
-                    columna,
-                    text=texto
-                )
-
-            tabla.column(
-            "ID",
-            width=70,
-            anchor="center"
-            )
-            
-
-            tabla.column(
-                "Grupo",
-                width=150,
-                anchor="center"
-            )
-
-            tabla.column(
-                "Robot 1",
-                width=280,
-                anchor="center"
-            )
-
-            tabla.column(
-                "Robot 2",
-                width=280,
-                anchor="center"
-            )
-
-            tabla.column(
-                "Estado",
-                width=170,
-                anchor="center"
-            )
-
-        else:
-
-            columnas = (
-                "ID",
-                "Etapa",
-                "Robot 1",
-                "Robot 2",
-                "Estado"
-            )
-
-            tabla["columns"] = columnas
-
-            encabezados = {
-                "ID": "ID",
-                "Etapa": "ETAPA",
-                "Robot 1": "ROBOT 1",
-                "Robot 2": "ROBOT 2",
-                "Estado": "ESTADO"
-            }
-
-            for columna, texto in encabezados.items():
-
-                tabla.heading(
-                    columna,
-                    text=texto
-                )
-
-            tabla.column(
-                "ID",
-                width=70,
-                anchor="center"
-            )
-
-            tabla.column(
-                "Etapa",
-                width=170,
-                anchor="center"
-            )
-
-            tabla.column(
-                "Robot 1",
-                width=320,
-                anchor="center"
-            )
-
-            tabla.column(
-                "Robot 2",
-                width=320,
-                anchor="center"
-            )
-
-            tabla.column(
-                "Estado",
-                width=180,
-                anchor="center"
-            )
-
     # Botón para generar llaves manualmente después de revisar la clasificación.
     boton_llaves = ttk.Button(
         marco_botones, text="GENERAR LLAVES",
@@ -1021,19 +898,11 @@ def mostrar_enfrentamientos(contenedor):
         return True
 
     def cargar_enfrentamientos():
-        for widget in contenido.winfo_children():
-            if isinstance(widget, tk.Label) and widget.cget("text") == "CLASIFICACIÓN Y ESTADÍSTICAS":
-                widget.destroy()
-
         participantes = obtener_participantes_validos()
         cantidad = len(participantes)
         grupos_terminados, hay_llaves = estado_fase_grupos()
 
         if grupos_terminados and not hay_llaves:
-            tk.Label(
-                contenido, text="CLASIFICACIÓN Y ESTADÍSTICAS",
-                font=("Arial", 14, "bold"), fg=TEXTO, bg=FONDO
-            ).pack(anchor="w", pady=(0, 8))
             if cargar_clasificacion():
                 boton_llaves.configure(state="normal", text="GENERAR LLAVES")
                 return
