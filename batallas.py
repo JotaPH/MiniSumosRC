@@ -394,7 +394,12 @@ def registrar_resultado(
 
     # Al guardar un resultado, comprobar si terminó la fase inicial
     # o si ya se puede crear la siguiente ronda eliminatoria.
-    actualizar_llaves_tras_resultado()
+    try:
+        actualizar_llaves_tras_resultado()
+    except Exception as error:
+        # El resultado ya quedó guardado; no bloquear la interfaz si falla
+        # la generación automática. El error queda visible en consola.
+        print(f"Error al actualizar las llaves eliminatorias: {error}")
 
 
 # ============================================================
