@@ -158,7 +158,7 @@ def _comparar(a, b, directos):
 
 
 def obtener_tabla_clasificacion():
-    """Devuelve filas ordenadas por posición de grupo y luego por nombre de grupo."""
+    """Filas visuales por puesto y grupo; cupos decididos por rendimiento."""
     conexion = conectar()
     try:
         cursor = conexion.cursor()
@@ -167,8 +167,9 @@ def obtener_tabla_clasificacion():
             return None
         stats, directos = resultado
         cursor.execute("SELECT COUNT(*) FROM grupo_participantes")
-        cantidad_grupos = cursor.fetchone()[0]
-        if cantidad_grupos:
+        hay_grupos = cursor.fetchone()[0] > 0
+
+        if hay_grupos:
             por_grupo = {}
             for s in stats.values():
                 if s["grupo_id"] is not None:
@@ -180,16 +181,36 @@ def obtener_tabla_clasificacion():
                     fila = dict(s)
                     fila["posicion_grupo"] = posicion
                     ranking.append(fila)
-            ranking.sort(key=lambda r: (r["posicion_grupo"], r["grupo"].casefold(), r["robot"].casefold()))
+            # Orden visible: todos los primeros puestos por grupo A, B, C;
+            # después todos los segundos, y así sucesivamente.
+            ranking.sort(key=lambda r: (
+                r["posicion_grupo"], r["grupo"].casefold(), r["robot"].casefold()
+            ))
             cantidad_total = len(stats)
             cupos = min(cantidad_clasificados(cantidad_total), len(ranking))
+
+            # Para decidir quién entra si los cupos se terminan dentro de una
+            # posición, comparar estadísticas entre los integrantes de esa posición.
+            seleccionados = set()
+            posiciones = sorted({r["posicion_grupo"] for r in ranking})
+            for posicion in posiciones:
+                nivel = [r for r in ranking if r["posicion_grupo"] == posicion]
+                nivel.sort(key=cmp_to_key(lambda a, b: _comparar(a, b, directos)))
+                for fila in nivel:
+                    if len(seleccionados) >= cupos:
+                        break
+                    seleccionados.add(fila["id"])
+                if len(seleccionados) >= cupos:
+                    break
         else:
             ranking = sorted(stats.values(), key=cmp_to_key(lambda a, b: _comparar(a, b, directos)))
-            for posicion, s in enumerate(ranking, 1):
-                s["posicion_grupo"] = posicion
+            for posicion, fila in enumerate(ranking, 1):
+                fila["posicion_grupo"] = posicion
             cupos = 2
-        for indice, fila in enumerate(ranking):
-            fila["clasifica"] = indice < cupos
+            seleccionados = {r["id"] for r in ranking[:cupos]}
+
+        for fila in ranking:
+            fila["clasifica"] = fila["id"] in seleccionados
             fila["tiempo_mostrar"] = _segundos_a_tiempo(fila["tiempo_promedio"])
         return ranking
     finally:
@@ -206,6 +227,7 @@ def _obtener_clasificados(cursor):
     if not hay_grupos:
         ranking = sorted(stats.values(), key=cmp_to_key(lambda a, b: _comparar(a, b, directos)))
         return [(s["id"], None) for s in ranking[:2]]
+
     por_grupo = {}
     for s in stats.values():
         if s["grupo_id"] is not None:
@@ -214,18 +236,23 @@ def _obtener_clasificados(cursor):
     for gid, miembros in por_grupo.items():
         miembros.sort(key=cmp_to_key(lambda a, b: _comparar(a, b, directos)))
         for posicion, s in enumerate(miembros, 1):
-            ranking.append({
-                "id": s["id"], "grupo_id": gid, "grupo": s["grupo"],
-                "posicion": posicion, "puntos": s["puntos"],
-                "tiempo_promedio": s["tiempo_promedio"],
-                "porcentaje_ataques": s["porcentaje_ataques"],
-                "porcentaje_victorias": s["porcentaje_victorias"],
-            })
-    ranking.sort(key=lambda r: (r["posicion"], r["grupo"].casefold()))
+            fila = dict(s)
+            fila["posicion"] = posicion
+            ranking.append(fila)
+
+    # La siembra prioriza el puesto de grupo. Entre robots que ocuparon
+    # el mismo puesto, desempata el rendimiento global acordado.
+    ranking.sort(key=lambda r: r["posicion"])
+    orden_siembra = []
+    for posicion in sorted({r["posicion"] for r in ranking}):
+        nivel = [r for r in ranking if r["posicion"] == posicion]
+        nivel.sort(key=cmp_to_key(lambda a, b: _comparar(a, b, directos)))
+        orden_siembra.extend(nivel)
+
     cursor.execute("SELECT COUNT(*) FROM grupo_participantes")
     cantidad_total = cursor.fetchone()[0]
-    cupos = min(cantidad_clasificados(cantidad_total), len(ranking))
-    return [(r["id"], r["grupo_id"]) for r in ranking[:cupos]]
+    cupos = min(cantidad_clasificados(cantidad_total), len(orden_siembra))
+    return [(r["id"], r["grupo_id"]) for r in orden_siembra[:cupos]]
 
 
 def _orden_siembra(cantidad):
