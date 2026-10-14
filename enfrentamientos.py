@@ -4,6 +4,8 @@ import sqlite3
 import os
 import random
 
+from .llaves import obtener_tabla_clasificacion, generar_llaves_manualmente
+
 
 # ============================================================
 # BASE DE DATOS
@@ -578,32 +580,20 @@ def generar_final_directa():
     conexion = conectar()
     cursor = conexion.cursor()
 
-    cursor.execute("""
-        INSERT INTO enfrentamientos
-        (
-            etapa,
-            grupo_id,
-            participante1,
-            participante2,
-            estado,
-            ronda
-        )
-        VALUES (
-            'Final',
-            NULL,
-            ?,
-            ?,
-            'Pendiente',
-            1
-        )
-    """, (
-        participantes[0][0],
-        participantes[1][0]
-    ))
+    # Se programan las tres batallas de la serie al mejor de tres.
+    for numero_batalla in range(1, 4):
+        cursor.execute("""
+            INSERT INTO enfrentamientos
+            (etapa, grupo_id, participante1, participante2, estado, ronda)
+            VALUES ('Final', NULL, ?, ?, 'Pendiente', ?)
+        """, (
+            participantes[0][0],
+            participantes[1][0],
+            numero_batalla
+        ))
 
     conexion.commit()
     conexion.close()
-
     return True
 
 
@@ -977,9 +967,164 @@ def mostrar_enfrentamientos(contenedor):
                 anchor="center"
             )
 
+    # Botón que solo se habilita cuando todos los grupos terminan.
+    boton_llaves = ttk.Button(
+        marco_botones,
+        text="GENERAR LLAVES",
+        command=lambda: generar_llaves(),
+        style="Generar.TButton",
+        state="disabled"
+    )
+    boton_llaves.pack(side="left", padx=(12, 0))
+
     # ========================================================
-    # CARGAR ENFRENTAMIENTOS
+    # CARGAR ENFRENTAMIENTOS O CLASIFICACIÓN
     # ========================================================
+
+    def estado_fase_grupos():
+        conexion = conectar()
+        cursor = conexion.cursor()
+        cursor.execute("SELECT COUNT(*) FROM enfrentamientos WHERE etapa = 'Grupo'")
+        total = cursor.fetchone()[0]
+        cursor.execute("""
+            SELECT COUNT(*) FROM enfrentamientos
+            WHERE etapa = 'Grupo' AND estado != 'Completado'
+        """)
+        pendientes = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM llaves")
+        hay_llaves = cursor.fetchone()[0] > 0
+        conexion.close()
+        return total > 0 and pendientes == 0, hay_llaves
+
+    def configurar_tabla(columnas, encabezados, anchos):
+        tabla.delete(*tabla.get_children())
+        tabla["columns"] = columnas
+        for columna, titulo in zip(columnas, encabezados):
+            tabla.heading(columna, text=titulo)
+            tabla.column(
+                columna,
+                width=anchos.get(columna, 130),
+                anchor="center",
+                stretch=True
+            )
+
+    def cargar_clasificacion():
+        filas = obtener_tabla_clasificacion()
+        if filas is None:
+            return False
+
+        columnas = (
+            "Posición", "Robot", "Grupo", "Puntos",
+            "Tiempo promedio", "% Ataques", "% Victorias", "Estado"
+        )
+        configurar_tabla(
+            columnas,
+            ("POS.", "ROBOT", "GRUPO", "PUNTOS", "TIEMPO PROM.", "% ATAQUES", "% VICTORIAS", "CLASIFICACIÓN"),
+            {
+                "Posición": 70, "Robot": 190, "Grupo": 110,
+                "Puntos": 90, "Tiempo promedio": 135,
+                "% Ataques": 115, "% Victorias": 120, "Estado": 145
+            }
+        )
+        tabla.tag_configure("clasifica", background="#DCFCE7", foreground="#166534")
+        tabla.tag_configure("eliminado", background="#FEE2E2", foreground="#991B1B")
+
+        for fila in filas:
+            tabla.insert(
+                "", "end",
+                values=(
+                    f'{fila["posicion_grupo"]}°',
+                    fila["robot"],
+                    fila["grupo"],
+                    fila["puntos"],
+                    fila["tiempo_mostrar"],
+                    f'{fila["porcentaje_ataques"]:.1f}%',
+                    f'{fila["porcentaje_victorias"]:.1f}%',
+                    "CLASIFICA" if fila["clasifica"] else "NO CLASIFICA"
+                ),
+                tags=("clasifica" if fila["clasifica"] else "eliminado",)
+            )
+        return True
+
+    def cargar_enfrentamientos():
+        participantes = obtener_participantes_validos()
+        cantidad = len(participantes)
+        grupos_terminados, hay_llaves = estado_fase_grupos()
+
+        # Terminada la fase de grupos, primero se muestra la clasificación.
+        if grupos_terminados and not hay_llaves:
+            tk.Label(
+                contenido,
+                text="CLASIFICACIÓN Y ESTADÍSTICAS",
+                font=("Arial", 14, "bold"),
+                fg=TEXTO,
+                bg=FONDO
+            ).pack(anchor="w", pady=(0, 8))
+            if cargar_clasificacion():
+                boton_llaves.configure(state="normal")
+                return
+
+        # Si ya se generaron llaves, se muestran solo los combates eliminatorios.
+        enfrentamientos = obtener_enfrentamientos()
+        if hay_llaves:
+            enfrentamientos = [
+                e for e in enfrentamientos
+                if e[1] not in ("Grupo", "Todos")
+            ]
+
+        if hay_llaves:
+            columnas = ("ID", "Ronda", "Robot 1", "Robot 2", "Estado")
+            configurar_tabla(
+                columnas, ("ID", "RONDA", "ROBOT 1", "ROBOT 2", "ESTADO"),
+                {"ID": 70, "Ronda": 200, "Robot 1": 260, "Robot 2": 260, "Estado": 150}
+            )
+        elif cantidad >= 6:
+            columnas = ("ID", "Grupo", "Robot 1", "Robot 2", "Estado")
+            configurar_tabla(
+                columnas, ("ID", "GRUPO", "ROBOT 1", "ROBOT 2", "ESTADO"),
+                {"ID": 70, "Grupo": 150, "Robot 1": 280, "Robot 2": 280, "Estado": 170}
+            )
+        else:
+            columnas = ("ID", "Etapa", "Robot 1", "Robot 2", "Estado")
+            configurar_tabla(
+                columnas, ("ID", "ETAPA", "ROBOT 1", "ROBOT 2", "ESTADO"),
+                {"ID": 70, "Etapa": 170, "Robot 1": 320, "Robot 2": 320, "Estado": 180}
+            )
+
+        for e in enfrentamientos:
+            id_batalla, etapa, grupo, robot1, robot2, estado = e
+            if hay_llaves:
+                valores = (id_batalla, etapa, robot1, robot2, estado)
+            elif cantidad >= 6:
+                valores = (id_batalla, grupo, robot1, robot2, estado)
+            else:
+                valores = (id_batalla, etapa, robot1, robot2, estado)
+            tabla.insert("", "end", values=valores)
+
+        boton_llaves.configure(
+            state="disabled",
+            text="LLAVES GENERADAS" if hay_llaves else "GENERAR LLAVES"
+        )
+
+    def generar_llaves():
+        confirmar = messagebox.askyesno(
+            "Generar llaves",
+            "Se calcularán los clasificados según las estadísticas y se crearán los enfrentamientos de la primera ronda. ¿Continuar?",
+            parent=contenedor.winfo_toplevel()
+        )
+        if not confirmar:
+            return
+        exito, mensaje = generar_llaves_manualmente()
+        if exito:
+            messagebox.showinfo("Llaves generadas", mensaje, parent=contenedor.winfo_toplevel())
+            # El contenido se redibuja para retirar el encabezado de clasificación.
+            for widget in contenido.winfo_children():
+                if isinstance(widget, tk.Label) and widget.cget("text") == "CLASIFICACIÓN Y ESTADÍSTICAS":
+                    widget.destroy()
+            cargar_enfrentamientos()
+        else:
+            messagebox.showwarning("No se pudieron generar", mensaje, parent=contenedor.winfo_toplevel())
+
 
     def cargar_enfrentamientos():
 
