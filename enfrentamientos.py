@@ -967,29 +967,20 @@ def mostrar_enfrentamientos(contenedor):
                 anchor="center"
             )
 
-    # Botón que solo se habilita cuando todos los grupos terminan.
+    # Botón para generar llaves manualmente después de revisar la clasificación.
     boton_llaves = ttk.Button(
-        marco_botones,
-        text="GENERAR LLAVES",
-        command=lambda: generar_llaves(),
-        style="Generar.TButton",
+        marco_botones, text="GENERAR LLAVES",
+        command=lambda: generar_llaves(), style="Generar.TButton",
         state="disabled"
     )
     boton_llaves.pack(side="left", padx=(12, 0))
-
-    # ========================================================
-    # CARGAR ENFRENTAMIENTOS O CLASIFICACIÓN
-    # ========================================================
 
     def estado_fase_grupos():
         conexion = conectar()
         cursor = conexion.cursor()
         cursor.execute("SELECT COUNT(*) FROM enfrentamientos WHERE etapa = 'Grupo'")
         total = cursor.fetchone()[0]
-        cursor.execute("""
-            SELECT COUNT(*) FROM enfrentamientos
-            WHERE etapa = 'Grupo' AND estado != 'Completado'
-        """)
+        cursor.execute("SELECT COUNT(*) FROM enfrentamientos WHERE etapa = 'Grupo' AND estado != 'Completado'")
         pendientes = cursor.fetchone()[0]
         cursor.execute("SELECT COUNT(*) FROM llaves")
         hay_llaves = cursor.fetchone()[0] > 0
@@ -1001,43 +992,26 @@ def mostrar_enfrentamientos(contenedor):
         tabla["columns"] = columnas
         for columna, titulo in zip(columnas, encabezados):
             tabla.heading(columna, text=titulo)
-            tabla.column(
-                columna,
-                width=anchos.get(columna, 130),
-                anchor="center",
-                stretch=True
-            )
+            tabla.column(columna, width=anchos.get(columna, 130), anchor="center", stretch=True)
 
     def cargar_clasificacion():
         filas = obtener_tabla_clasificacion()
         if filas is None:
             return False
-
-        columnas = (
-            "Posición", "Robot", "Grupo", "Puntos",
-            "Tiempo promedio", "% Ataques", "% Victorias", "Estado"
-        )
+        columnas = ("Posición", "Robot", "Grupo", "Puntos", "Tiempo promedio", "% Ataques", "% Victorias", "Estado")
         configurar_tabla(
             columnas,
             ("POS.", "ROBOT", "GRUPO", "PUNTOS", "TIEMPO PROM.", "% ATAQUES", "% VICTORIAS", "CLASIFICACIÓN"),
-            {
-                "Posición": 70, "Robot": 190, "Grupo": 110,
-                "Puntos": 90, "Tiempo promedio": 135,
-                "% Ataques": 115, "% Victorias": 120, "Estado": 145
-            }
+            {"Posición": 70, "Robot": 190, "Grupo": 110, "Puntos": 90, "Tiempo promedio": 135, "% Ataques": 115, "% Victorias": 120, "Estado": 145}
         )
         tabla.tag_configure("clasifica", background="#DCFCE7", foreground="#166534")
         tabla.tag_configure("eliminado", background="#FEE2E2", foreground="#991B1B")
-
         for fila in filas:
             tabla.insert(
                 "", "end",
                 values=(
-                    f'{fila["posicion_grupo"]}°',
-                    fila["robot"],
-                    fila["grupo"],
-                    fila["puntos"],
-                    fila["tiempo_mostrar"],
+                    f'{fila["posicion_grupo"]}°', fila["robot"], fila["grupo"],
+                    fila["puntos"], fila["tiempo_mostrar"],
                     f'{fila["porcentaje_ataques"]:.1f}%',
                     f'{fila["porcentaje_victorias"]:.1f}%',
                     "CLASIFICA" if fila["clasifica"] else "NO CLASIFICA"
@@ -1047,32 +1021,26 @@ def mostrar_enfrentamientos(contenedor):
         return True
 
     def cargar_enfrentamientos():
+        for widget in contenido.winfo_children():
+            if isinstance(widget, tk.Label) and widget.cget("text") == "CLASIFICACIÓN Y ESTADÍSTICAS":
+                widget.destroy()
+
         participantes = obtener_participantes_validos()
         cantidad = len(participantes)
         grupos_terminados, hay_llaves = estado_fase_grupos()
 
-        # Terminada la fase de grupos, primero se muestra la clasificación.
         if grupos_terminados and not hay_llaves:
             tk.Label(
-                contenido,
-                text="CLASIFICACIÓN Y ESTADÍSTICAS",
-                font=("Arial", 14, "bold"),
-                fg=TEXTO,
-                bg=FONDO
+                contenido, text="CLASIFICACIÓN Y ESTADÍSTICAS",
+                font=("Arial", 14, "bold"), fg=TEXTO, bg=FONDO
             ).pack(anchor="w", pady=(0, 8))
             if cargar_clasificacion():
-                boton_llaves.configure(state="normal")
+                boton_llaves.configure(state="normal", text="GENERAR LLAVES")
                 return
 
-        # Si ya se generaron llaves, se muestran solo los combates eliminatorios.
         enfrentamientos = obtener_enfrentamientos()
         if hay_llaves:
-            enfrentamientos = [
-                e for e in enfrentamientos
-                if e[1] not in ("Grupo", "Todos")
-            ]
-
-        if hay_llaves:
+            enfrentamientos = [e for e in enfrentamientos if e[1] not in ("Grupo", "Todos")]
             columnas = ("ID", "Ronda", "Robot 1", "Robot 2", "Estado")
             configurar_tabla(
                 columnas, ("ID", "RONDA", "ROBOT 1", "ROBOT 2", "ESTADO"),
@@ -1109,7 +1077,7 @@ def mostrar_enfrentamientos(contenedor):
     def generar_llaves():
         confirmar = messagebox.askyesno(
             "Generar llaves",
-            "Se calcularán los clasificados según las estadísticas y se crearán los enfrentamientos de la primera ronda. ¿Continuar?",
+            "Se calcularán los clasificados y se crearán los enfrentamientos de la primera ronda. ¿Continuar?",
             parent=contenedor.winfo_toplevel()
         )
         if not confirmar:
@@ -1117,117 +1085,37 @@ def mostrar_enfrentamientos(contenedor):
         exito, mensaje = generar_llaves_manualmente()
         if exito:
             messagebox.showinfo("Llaves generadas", mensaje, parent=contenedor.winfo_toplevel())
-            # El contenido se redibuja para retirar el encabezado de clasificación.
-            for widget in contenido.winfo_children():
-                if isinstance(widget, tk.Label) and widget.cget("text") == "CLASIFICACIÓN Y ESTADÍSTICAS":
-                    widget.destroy()
             cargar_enfrentamientos()
         else:
             messagebox.showwarning("No se pudieron generar", mensaje, parent=contenedor.winfo_toplevel())
 
-
-    def cargar_enfrentamientos():
-
-        participantes = obtener_participantes_validos()
-
-        cantidad = len(participantes)
-
-        configurar_columnas(cantidad)
-
-        enfrentamientos = obtener_enfrentamientos()
-
-        for enfrentamiento in enfrentamientos:
-
-            id_enfrentamiento, etapa, grupo, robot1, robot2, estado = enfrentamiento
-
-            if cantidad >= 6:
-
-                valores = (
-                    id_enfrentamiento,
-                    grupo,
-                    robot1,
-                    robot2,
-                    estado
-                )
-
-            else:
-
-                valores = (
-                    id_enfrentamiento,
-                    etapa,
-                    robot1,
-                    robot2,
-                    estado
-                )
-
-            tabla.insert(
-                "",
-                "end",
-                values=valores
-            )
-
-    # ========================================================
-    # PREPARAR
-    # ========================================================
-
     def preparar():
-
         participantes = obtener_participantes_validos()
-
         cantidad = len(participantes)
-
         if cantidad < 2:
-
             messagebox.showwarning(
                 "Participantes insuficientes",
-                (
-                    "Se necesitan al menos 2 participantes "
-                    "que cumplan todos los requisitos."
-                )
+                "Se necesitan al menos 2 participantes que cumplan todos los requisitos.",
+                parent=contenedor.winfo_toplevel()
             )
-
             return
-
         confirmar = messagebox.askyesno(
             "Preparar competencia",
-            (
-                f"Hay {cantidad} participantes válidos.\n\n"
-                "Se generará nuevamente la estructura "
-                "de enfrentamientos.\n\n"
-                "¿Deseas continuar?"
-            )
+            f"Hay {cantidad} participantes válidos.\n\nSe generará nuevamente la estructura de enfrentamientos y se borrarán los resultados anteriores.\n\n¿Deseas continuar?",
+            parent=contenedor.winfo_toplevel()
         )
-
         if not confirmar:
             return
-
         exito, mensaje = preparar_competencia()
-
         if exito:
-
             cargar_enfrentamientos()
-
-            total = len(
-                obtener_enfrentamientos()
-            )
-
+            total = len(obtener_enfrentamientos())
             messagebox.showinfo(
                 "Competencia preparada",
-                (
-                    f"{mensaje}\n\n"
-                    f"Enfrentamientos generados: {total}"
-                )
+                f"{mensaje}\n\nEnfrentamientos generados: {total}",
+                parent=contenedor.winfo_toplevel()
             )
-
         else:
-
-            messagebox.showwarning(
-                "No se pudo preparar",
-                mensaje
-            )
-
-    # ========================================================
-    # CARGA INICIAL
-    # ========================================================
+            messagebox.showwarning("No se pudo preparar", mensaje, parent=contenedor.winfo_toplevel())
 
     cargar_enfrentamientos()
