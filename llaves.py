@@ -57,9 +57,8 @@ def _comparar(a, b, enfrentamientos_directos):
     # Cada registro contiene id, grupo, victorias, combates, porcentaje.
     if a["victorias"] != b["victorias"]:
         return -1 if a["victorias"] > b["victorias"] else 1
-    if a["porcentaje"] != b["porcentaje"]:
-        return -1 if a["porcentaje"] > b["porcentaje"] else 1
 
+    # Si tienen las mismas victorias, priorizar el enfrentamiento directo.
     ganador_directo = enfrentamientos_directos.get(
         frozenset((a["id"], b["id"]))
     )
@@ -67,6 +66,9 @@ def _comparar(a, b, enfrentamientos_directos):
         return -1
     if ganador_directo == b["id"]:
         return 1
+
+    if a["porcentaje"] != b["porcentaje"]:
+        return -1 if a["porcentaje"] > b["porcentaje"] else 1
     return -1 if a["id"] < b["id"] else (1 if a["id"] > b["id"] else 0)
 
 
