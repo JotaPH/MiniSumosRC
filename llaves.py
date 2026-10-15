@@ -421,3 +421,44 @@ def actualizar_llaves_tras_resultado():
         raise
     finally:
         conexion.close()
+
+
+
+def obtener_datos_llaves():
+    """Devuelve las rondas y sus combates con nombres para dibujar el cuadro visual."""
+    conexion = conectar()
+    try:
+        cursor = conexion.cursor()
+        cursor.execute("""
+            SELECT l.id, l.ronda, l.posicion,
+                   l.participante1, l.participante2, l.ganador, l.estado,
+                   p1.robot, p1.nombre, p2.robot, p2.nombre
+            FROM llaves l
+            LEFT JOIN participantes p1 ON p1.id = l.participante1
+            LEFT JOIN participantes p2 ON p2.id = l.participante2
+            ORDER BY l.id
+        """)
+        filas = cursor.fetchall()
+        rondas = []
+        por_nombre = {}
+        for fila in filas:
+            (llave_id, ronda, posicion, p1, p2, ganador, estado,
+             robot1, nombre1, robot2, nombre2) = fila
+            if ronda not in por_nombre:
+                por_nombre[ronda] = []
+                rondas.append({"nombre": ronda, "combates": por_nombre[ronda]})
+            por_nombre[ronda].append({
+                "id": llave_id,
+                "posicion": posicion,
+                "participante1": p1,
+                "participante2": p2,
+                "ganador": ganador,
+                "estado": estado or "Pendiente",
+                "robot1": robot1 or "Por definir",
+                "nombre1": nombre1 or "",
+                "robot2": robot2 or "Por definir",
+                "nombre2": nombre2 or "",
+            })
+        return rondas
+    finally:
+        conexion.close()
