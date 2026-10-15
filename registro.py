@@ -22,23 +22,71 @@ conexion = sqlite3.connect(ruta_bd)
 cursor = conexion.cursor()
 
 
-def recalcular_competencia_si_no_hay_resultados():
-    """Actualiza el calendario tras cambios de participantes solo si aún no se jugó."""
+def confirmar_y_limpiar_competencia(accion, parent=None):
+    """Confirma el reinicio si ya hubo actividad y limpia el calendario antes del cambio."""
     try:
         conexion_local = sqlite3.connect(ruta_bd)
         cursor_local = conexion_local.cursor()
         cursor_local.execute("""
             SELECT COUNT(*) FROM enfrentamientos
-            WHERE estado = 'Completado'
+            WHERE estado IN ('En curso', 'En Curso', 'Pausada', 'Completado')
         """)
-        hay_resultados = cursor_local.fetchone()[0] > 0
+        hay_actividad = cursor_local.fetchone()[0] > 0
         conexion_local.close()
-        if hay_resultados:
-            return
-        from .enfrentamientos import preparar_competencia
-        preparar_competencia()
+    except sqlite3.OperationalError:
+        # La tabla aún no existe: todavía no hay una competencia preparada.
+        hay_actividad = False
     except Exception as error:
-        print(f"No se pudo recalcular automáticamente la competencia: {error}")
+        messagebox.showerror(
+            "No se pudo verificar la competencia",
+            f"No se puede comprobar el estado de las batallas. No se realizó ningún cambio.\\n\\n{error}",
+            parent=parent
+        )
+        return False
+
+    if hay_actividad:
+        confirmar = messagebox.askyesno(
+            "Reiniciar competencia",
+            f"Hay una batalla en curso o completada. Si continúas para {accion}, "
+            "se reiniciarán todas las batallas y sus resultados, y se generará "
+            "un nuevo calendario con los participantes actuales.\\n\\n¿Deseas continuar?",
+            parent=parent
+        )
+        if not confirmar:
+            return False
+
+    # Se limpian las referencias antiguas antes de modificar participantes.
+    try:
+        from .enfrentamientos import limpiar_competencia_anterior
+        limpiar_competencia_anterior()
+    except Exception as error:
+        messagebox.showerror(
+            "No se pudo reiniciar",
+            f"No se pudo limpiar el calendario anterior. No se realizó el cambio.\\n\\n{error}",
+            parent=parent
+        )
+        return False
+
+    return True
+
+
+def regenerar_calendario_participantes(parent=None):
+    """Genera un calendario nuevo con la lista actual de participantes."""
+    try:
+        from .enfrentamientos import preparar_competencia
+        exito, mensaje = preparar_competencia()
+        if not exito:
+            messagebox.showwarning(
+                "Calendario no generado",
+                f"{mensaje}\\n\\nLos participantes se guardaron, pero no hay un calendario nuevo.",
+                parent=parent
+            )
+    except Exception as error:
+        messagebox.showerror(
+            "Error al generar calendario",
+            f"Los participantes se guardaron, pero no se pudo generar el calendario.\\n\\n{error}",
+            parent=parent
+        )
 
 
 # ============================================================
@@ -1259,6 +1307,14 @@ def mostrar_registro(contenedor):
                 return
 
 
+            # Antes de modificar datos, pedir confirmación si ya hubo batallas
+            # y limpiar las referencias del calendario anterior.
+            if not confirmar_y_limpiar_competencia(
+                "editar el participante" if editando else "agregar el participante",
+                parent=ventana_formulario
+            ):
+                return
+
             # =================================================
             # EDITAR
             # =================================================
@@ -1341,11 +1397,9 @@ def mostrar_registro(contenedor):
 
             conexion.commit()
 
-            # Al agregar un participante, regenerar el calendario automáticamente
-            # si la competencia todavía no tiene resultados registrados.
-            if not editando:
-                recalcular_competencia_si_no_hay_resultados()
-
+            regenerar_calendario_participantes(
+                parent=contenedor.winfo_toplevel()
+            )
             cargar_participantes()
             ventana_formulario.destroy()
 
@@ -1471,12 +1525,19 @@ def mostrar_registro(contenedor):
         confirmar = messagebox.askyesno(
             "Eliminar participante",
             "¿Quieres eliminar el participante seleccionado?"
+            if len(seleccionado) == 1
+            else "¿Quieres eliminar los participantes seleccionados?",
+            parent=contenedor.winfo_toplevel()
         )
-
 
         if not confirmar:
             return
 
+        if not confirmar_y_limpiar_competencia(
+            "eliminar el/los participante(s)",
+            parent=contenedor.winfo_toplevel()
+        ):
+            return
 
         for elemento in seleccionado:
 
@@ -1566,7 +1627,9 @@ def mostrar_registro(contenedor):
         conexion.commit()
 
 
-        recalcular_competencia_si_no_hay_resultados()
+        regenerar_calendario_participantes(
+            parent=contenedor.winfo_toplevel()
+        )
         cargar_participantes()
 
     # ========================================================
