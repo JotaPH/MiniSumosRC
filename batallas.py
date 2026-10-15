@@ -804,6 +804,19 @@ def mostrar_batallas(contenedor):
         marcador = None
         subtitulo = "TORNEO FINALIZADO"
 
+        # Garantiza que la pantalla de cierre también funcione si Batallas se abre primero.
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS llaves (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ronda TEXT NOT NULL,
+                posicion INTEGER NOT NULL,
+                participante1 INTEGER,
+                participante2 INTEGER,
+                ganador INTEGER,
+                estado TEXT DEFAULT 'Pendiente'
+            )
+        """)
+
         # Si hay cuadro eliminatorio, el último registro de llaves corresponde a la final.
         cursor.execute("SELECT COUNT(*) FROM llaves")
         hay_llaves = cursor.fetchone()[0] > 0
