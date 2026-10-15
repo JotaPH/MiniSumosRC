@@ -310,6 +310,15 @@ def _crear_cuadro_inicial(cursor, clasificados):
 
 
 def generar_llaves_manualmente():
+    return _generar_llaves(reiniciar=False)
+
+
+def regenerar_llaves_manualmente():
+    """Reinicia solo las llaves eliminatorias y las vuelve a crear para pruebas."""
+    return _generar_llaves(reiniciar=True)
+
+
+def _generar_llaves(reiniciar=False):
     conexion = conectar()
     try:
         cursor = conexion.cursor()
@@ -323,8 +332,18 @@ def generar_llaves_manualmente():
             return False, "No hay una fase de grupos preparada."
         if pendientes:
             return False, "Aún hay batallas de grupos pendientes."
-        if existentes:
+        if existentes and not reiniciar:
             return False, "Las llaves ya fueron generadas."
+
+        if existentes and reiniciar:
+            # Borra únicamente enfrentamientos cuyas etapas pertenecen al cuadro,
+            # nunca las batallas originales de grupos.
+            cursor.execute("SELECT DISTINCT ronda FROM llaves")
+            etapas_llaves = [fila[0] for fila in cursor.fetchall()]
+            for etapa in etapas_llaves:
+                cursor.execute("DELETE FROM enfrentamientos WHERE etapa = ?", (etapa,))
+            cursor.execute("DELETE FROM llaves")
+
         clasificados = _obtener_clasificados(cursor)
         if not clasificados or len(clasificados) < 2:
             return False, "No se pudieron determinar al menos dos clasificados."
