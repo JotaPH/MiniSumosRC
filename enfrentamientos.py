@@ -4,7 +4,7 @@ import sqlite3
 import os
 import random
 
-from .llaves import obtener_tabla_clasificacion, generar_llaves_manualmente, obtener_datos_llaves
+from .llaves import obtener_tabla_clasificacion, generar_llaves_manualmente, regenerar_llaves_manualmente, obtener_datos_llaves
 
 
 # ============================================================
@@ -872,10 +872,10 @@ def mostrar_enfrentamientos(contenedor):
         marco_llaves.pack(fill="both", expand=True)
         canvas_llaves.delete("all")
 
-        ancho_tarjeta, alto_tarjeta = 220, 88
-        separacion_x, margen_x, margen_y = 72, 24, 48
+        ancho_tarjeta, alto_tarjeta = 200, 70
+        separacion_x, margen_x, margen_y = 28, 18, 20
         cantidad_primera = len(rondas[0]["combates"])
-        alto_util = max(520, cantidad_primera * 132)
+        alto_util = max(360, cantidad_primera * 88)
         alto_total = alto_util + margen_y * 2
         ancho_total = margen_x * 2 + len(rondas) * ancho_tarjeta + max(0, len(rondas)-1) * separacion_x
         centros = []
@@ -898,8 +898,6 @@ def mostrar_enfrentamientos(contenedor):
 
         for indice, ronda in enumerate(rondas):
             x = margen_x + indice * (ancho_tarjeta + separacion_x)
-            canvas_llaves.create_text(x + ancho_tarjeta/2, 20, text=ronda["nombre"].upper(),
-                                      fill="#922b2b", font=("Arial", 11, "bold"), width=ancho_tarjeta)
             for j, combate in enumerate(ronda["combates"]):
                 cy = centros[indice][j]
                 y1, y2 = cy - alto_tarjeta/2, cy + alto_tarjeta/2
@@ -908,8 +906,8 @@ def mostrar_enfrentamientos(contenedor):
                 canvas_llaves.create_line(x, cy, x + ancho_tarjeta, cy, fill="#E2E8F0", width=1)
                 ganador = combate["ganador"]
                 filas_robot = (
-                    (combate["participante1"], combate["robot1"], combate["nombre1"], y1 + 21),
-                    (combate["participante2"], combate["robot2"], combate["nombre2"], cy + 22),
+                    (combate["participante1"], combate["robot1"], combate["nombre1"], y1 + 17),
+                    (combate["participante2"], combate["robot2"], combate["nombre2"], cy + 17),
                 )
                 for pid, robot, persona, yy in filas_robot:
                     color = "#334155"
@@ -917,15 +915,15 @@ def mostrar_enfrentamientos(contenedor):
                         color = "#94A3B8"
                     elif ganador is not None:
                         color = "#15803D" if pid == ganador else "#94A3B8"
-                    canvas_llaves.create_text(x + 9, yy - 5, text=robot, anchor="w", fill=color,
-                                              font=("Arial", 10, "bold"), width=ancho_tarjeta - 18)
-                    canvas_llaves.create_text(x + 9, yy + 8, text=persona, anchor="w", fill="#64748B",
-                                              font=("Arial", 8), width=ancho_tarjeta - 18)
-                if combate["estado"] == "Completado":
-                    canvas_llaves.create_oval(x + ancho_tarjeta - 22, y1 + 5, x + ancho_tarjeta - 10, y1 + 17,
-                                              fill="#16A34A", outline="")
-                elif combate["estado"] == "En curso":
-                    canvas_llaves.create_text(x + ancho_tarjeta - 10, y1 + 11, text="●",
+                    canvas_llaves.create_text(x + 8, yy - 4, text=robot, anchor="w", fill=color,
+                                              font=("Arial", 9, "bold"), width=ancho_tarjeta - 34)
+                    canvas_llaves.create_text(x + 8, yy + 8, text=persona, anchor="w", fill="#64748B",
+                                              font=("Arial", 7), width=ancho_tarjeta - 16)
+                    if ganador is not None and pid == ganador:
+                        canvas_llaves.create_text(x + ancho_tarjeta - 12, yy - 4, text="●",
+                                                  fill="#16A34A", font=("Arial", 10, "bold"))
+                if combate["estado"] == "En curso":
+                    canvas_llaves.create_text(x + ancho_tarjeta - 12, y1 + 9, text="●",
                                               fill="#D97706", font=("Arial", 10, "bold"))
         canvas_llaves.configure(scrollregion=(0, 0, ancho_total, alto_total))
         return True
@@ -1016,10 +1014,10 @@ def mostrar_enfrentamientos(contenedor):
         if hay_llaves:
             # Mostrar el cuadro tradicional conectado en lugar de una tabla plana.
             if cargar_cuadro_llaves():
-                boton_llaves.configure(state="disabled", text="LLAVES GENERADAS")
+                boton_llaves.configure(state="normal", text="REGENERAR LLAVES")
                 return
             mostrar_tabla()
-            boton_llaves.configure(state="disabled", text="LLAVES GENERADAS")
+            boton_llaves.configure(state="normal", text="REGENERAR LLAVES")
 
         elif cantidad <= 5 and todos_terminados and hay_final:
             # Para 3–5 participantes, ocultar el todos-contra-todos una vez finalizado
@@ -1070,14 +1068,25 @@ def mostrar_enfrentamientos(contenedor):
             tabla.insert("", "end", values=valores)
 
     def generar_llaves():
-        confirmar = messagebox.askyesno(
-            "Generar llaves",
-            "Se calcularán los clasificados y se crearán los enfrentamientos de la primera ronda. ¿Continuar?",
-            parent=contenedor.winfo_toplevel()
-        )
-        if not confirmar:
-            return
-        exito, mensaje = generar_llaves_manualmente()
+        hay_llaves_actuales = bool(obtener_datos_llaves())
+        if hay_llaves_actuales:
+            confirmar = messagebox.askyesno(
+                "Regenerar llaves",
+                "Se borrarán los resultados de las llaves eliminatorias y se volverán a crear desde la primera ronda. Los resultados de la fase de grupos se conservarán. ¿Continuar?",
+                parent=contenedor.winfo_toplevel()
+            )
+            if not confirmar:
+                return
+            exito, mensaje = regenerar_llaves_manualmente()
+        else:
+            confirmar = messagebox.askyesno(
+                "Generar llaves",
+                "Se calcularán los clasificados y se crearán los enfrentamientos de la primera ronda. ¿Continuar?",
+                parent=contenedor.winfo_toplevel()
+            )
+            if not confirmar:
+                return
+            exito, mensaje = generar_llaves_manualmente()
         if exito:
             messagebox.showinfo("Llaves generadas", mensaje, parent=contenedor.winfo_toplevel())
             cargar_enfrentamientos()
