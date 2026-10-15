@@ -897,39 +897,85 @@ def mostrar_enfrentamientos(contenedor):
             )
         return True
 
+    def estado_fase_todos():
+        conexion = conectar()
+        try:
+            cursor = conexion.cursor()
+            cursor.execute("SELECT COUNT(*) FROM enfrentamientos WHERE etapa = 'Todos'")
+            total = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) FROM enfrentamientos WHERE etapa = 'Todos' AND estado != 'Completado'")
+            pendientes = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) FROM enfrentamientos WHERE etapa = 'Final'")
+            finales = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) FROM enfrentamientos WHERE etapa = 'Final' AND estado != 'Completado'")
+            finales_pendientes = cursor.fetchone()[0]
+            return total > 0 and pendientes == 0, finales > 0, finales_pendientes
+        finally:
+            conexion.close()
+
     def cargar_enfrentamientos():
         participantes = obtener_participantes_validos()
         cantidad = len(participantes)
         grupos_terminados, hay_llaves = estado_fase_grupos()
+        todos_terminados, hay_final, finales_pendientes = estado_fase_todos()
 
-        if grupos_terminados and not hay_llaves:
+        # La clasificación se muestra solo al cerrar todos los combates de grupos.
+        if cantidad >= 6 and grupos_terminados and not hay_llaves:
             if cargar_clasificacion():
                 boton_llaves.configure(state="normal", text="GENERAR LLAVES")
                 return
 
         enfrentamientos = obtener_enfrentamientos()
+
         if hay_llaves:
+            # Tras generar las llaves, mostrar exclusivamente rondas eliminatorias.
             enfrentamientos = [e for e in enfrentamientos if e[1] not in ("Grupo", "Todos")]
             columnas = ("ID", "Ronda", "Robot 1", "Robot 2", "Estado")
             configurar_tabla(
                 columnas, ("ID", "RONDA", "ROBOT 1", "ROBOT 2", "ESTADO"),
                 {"ID": 70, "Ronda": 200, "Robot 1": 260, "Robot 2": 260, "Estado": 150}
             )
+            boton_llaves.configure(state="disabled", text="LLAVES GENERADAS")
+
+        elif cantidad <= 5 and todos_terminados and hay_final:
+            # Para 3–5 participantes, ocultar el todos-contra-todos una vez finalizado
+            # y dejar visible la final entre los dos mejores.
+            enfrentamientos = [fila for fila in enfrentamientos if fila[1] == "Final"]
+            columnas = ("ID", "Etapa", "Robot 1", "Robot 2", "Estado")
+            configurar_tabla(
+                columnas, ("ID", "ETAPA", "ROBOT 1", "ROBOT 2", "ESTADO"),
+                {"ID": 70, "Etapa": 170, "Robot 1": 320, "Robot 2": 320, "Estado": 180}
+            )
+            boton_llaves.configure(state="disabled", text="NO SE REQUIEREN LLAVES")
+
+        elif cantidad == 2:
+            # La final directa tiene tres combates programados para la serie al mejor de tres.
+            enfrentamientos = [fila for fila in enfrentamientos if fila[1] == "Final"]
+            columnas = ("ID", "Etapa", "Robot 1", "Robot 2", "Estado")
+            configurar_tabla(
+                columnas, ("ID", "ETAPA / BATALLA", "ROBOT 1", "ROBOT 2", "ESTADO"),
+                {"ID": 70, "Etapa": 170, "Robot 1": 320, "Robot 2": 320, "Estado": 180}
+            )
+            boton_llaves.configure(state="disabled", text="MEJOR DE 3")
+
         elif cantidad >= 6:
             columnas = ("ID", "Grupo", "Robot 1", "Robot 2", "Estado")
             configurar_tabla(
                 columnas, ("ID", "GRUPO", "ROBOT 1", "ROBOT 2", "ESTADO"),
                 {"ID": 70, "Grupo": 150, "Robot 1": 280, "Robot 2": 280, "Estado": 170}
             )
+            boton_llaves.configure(state="disabled", text="GENERAR LLAVES")
+
         else:
             columnas = ("ID", "Etapa", "Robot 1", "Robot 2", "Estado")
             configurar_tabla(
                 columnas, ("ID", "ETAPA", "ROBOT 1", "ROBOT 2", "ESTADO"),
                 {"ID": 70, "Etapa": 170, "Robot 1": 320, "Robot 2": 320, "Estado": 180}
             )
+            boton_llaves.configure(state="disabled", text="NO SE REQUIEREN LLAVES")
 
-        for e in enfrentamientos:
-            id_batalla, etapa, grupo, robot1, robot2, estado = e
+        for fila in enfrentamientos:
+            id_batalla, etapa, grupo, robot1, robot2, estado = fila
             if hay_llaves:
                 valores = (id_batalla, etapa, robot1, robot2, estado)
             elif cantidad >= 6:
@@ -937,11 +983,6 @@ def mostrar_enfrentamientos(contenedor):
             else:
                 valores = (id_batalla, etapa, robot1, robot2, estado)
             tabla.insert("", "end", values=valores)
-
-        boton_llaves.configure(
-            state="disabled",
-            text="LLAVES GENERADAS" if hay_llaves else "GENERAR LLAVES"
-        )
 
     def generar_llaves():
         confirmar = messagebox.askyesno(
