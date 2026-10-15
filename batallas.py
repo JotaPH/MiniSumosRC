@@ -285,84 +285,150 @@ def obtener_batalla_actual():
     # Si no hay activa, siguiente pendiente
     if batalla is None:
 
-        # Si la serie de dos participantes terminó, mostrar el marcador global
-        # del mejor de tres en vez de dejar únicamente "No hay batallas".
-        conexion = conectar_bd()
-        cursor = conexion.cursor()
         cursor.execute("""
-            SELECT COUNT(*), SUM(CASE WHEN estado = 'Completado' THEN 1 ELSE 0 END)
-            FROM enfrentamientos
-            WHERE etapa = 'Final'
-        """)
-        total_finales, finales_completadas = cursor.fetchone()
-        resultado_serie = None
-        if total_finales == 3 and finales_completadas == 3:
-            cursor.execute("""
-                SELECT e.ganador, COUNT(*) AS victorias, p.robot
-                FROM enfrentamientos e
-                JOIN participantes p ON p.id = e.ganador
-                WHERE e.etapa = 'Final' AND e.estado = 'Completado'
-                GROUP BY e.ganador, p.robot
-                ORDER BY victorias DESC
-            """)
-            victorias = cursor.fetchall()
-            if victorias:
-                ganador_serie, cantidad_victorias, robot_ganador = victorias[0]
-                cursor.execute("""
-                    SELECT COUNT(*) FROM enfrentamientos
-                    WHERE etapa = 'Final' AND estado = 'Completado'
-                      AND ganador != ?
-                """, (ganador_serie,))
-                derrotas = cursor.fetchone()[0]
-                resultado_serie = (robot_ganador, cantidad_victorias, derrotas)
-        conexion.close()
+            SELECT
+                e.id,
+                e.etapa,
+                COALESCE(g.nombre, ''),
+                e.participante1,
+                e.participante2,
+                p1.nombre,
+                p1.robot,
+                p2.nombre,
+                p2.robot,
+                e.estado,
+                e.ronda,
+                COALESCE(e.criterio_ganador, ''),
+                COALESCE(e.tiempo, ''),
+                COALESCE(e.ataques1, 0),
+                COALESCE(e.ataques2, 0)
 
-        if resultado_serie:
-            robot_ganador, victorias_ganador, victorias_rival = resultado_serie
-            tk.Label(
-                principal,
-                text="SERIE FINALIZADA",
-                font=("Segoe UI", 16, "bold"),
-                fg="#68737d",
-                bg="#f3f5f7"
-            ).pack(pady=(75, 12))
-            tk.Label(
-                principal,
-                text="GANADOR DEL MEJOR DE 3",
-                font=("Segoe UI", 25, "bold"),
-                fg="#166534",
-                bg="#f3f5f7"
-            ).pack(pady=(0, 14))
-            tk.Label(
-                principal,
-                text=robot_ganador,
-                font=("Segoe UI", 34, "bold"),
-                fg="#17202a",
-                bg="#f3f5f7"
-            ).pack(pady=(0, 12))
-            tk.Label(
-                principal,
-                text=f"Marcador final: {victorias_ganador} - {victorias_rival}",
-                font=("Segoe UI", 20, "bold"),
-                fg="#17202a",
-                bg="#f3f5f7"
-            ).pack()
-        else:
-            tk.Label(
-                principal,
-                text="BATALLAS",
-                font=("Segoe UI", 30, "bold"),
-                fg="#17202a",
-                bg="#f3f5f7"
-            ).pack(pady=(80, 15))
-            tk.Label(
-                principal,
-                text="No hay batallas pendientes",
-                font=("Segoe UI", 16),
-                fg="#68737d",
-                bg="#f3f5f7"
-            ).pack()
-        return
+            FROM enfrentamientos e
+
+            INNER JOIN participantes p1
+                ON e.participante1 = p1.id
+
+            INNER JOIN participantes p2
+                ON e.participante2 = p2.id
+
+            LEFT JOIN grupos g
+                ON e.grupo_id = g.id
+
+            WHERE e.estado = 'Pendiente'
+
+            ORDER BY e.id
+
+            LIMIT 1
+        """)
+
+        batalla = cursor.fetchone()
+
+    conexion.close()
+
+    return batalla
+
+
+# ============================================================
+# ACTUALIZAR ESTADO
+# ============================================================
+
+def actualizar_estado(id_batalla, estado):
+
+    conexion = conectar_bd()
+    cursor = conexion.cursor()
+
+    cursor.execute("""
+        UPDATE enfrentamientos
+
+        SET estado = ?
+
+        WHERE id = ?
+    """, (
+        estado,
+        id_batalla
+    ))
+
+    conexion.commit()
+    conexion.close()
+
+
+# ============================================================
+# REGISTRAR RESULTADO
+# ============================================================
+
+def registrar_resultado(
+    id_batalla,
+    ganador,
+    criterio,
+    tiempo,
+    ataques1,
+    ataques2
+):
+
+    conexion = conectar_bd()
+    cursor = conexion.cursor()
+
+    cursor.execute("""
+        UPDATE enfrentamientos
+
+        SET
+            ganador = ?,
+            criterio_ganador = ?,
+            estado = 'Completado',
+            tiempo = ?,
+            ataques1 = ?,
+            ataques2 = ?
+
+        WHERE id = ?
+    """, (
+        ganador,
+        criterio,
+        tiempo,
+        ataques1,
+        ataques2,
+        id_batalla
+    ))
+
+    conexion.commit()
+    conexion.close()
+
+    # Al guardar un resultado, comprobar si terminó la fase inicial
+    # o si ya se puede crear la siguiente ronda eliminatoria.
+    try:
+        actualizar_llaves_tras_resultado()
+    except Exception as error:
+        # El resultado ya quedó guardado; no bloquear la interfaz si falla
+        # la generación automática. El error queda visible en consola.
+        print(f"Error al actualizar las llaves eliminatorias: {error}")
+
+
+# ============================================================
+# CENTRAR VENTANA
+# ============================================================
+
+def centrar_ventana(ventana, ancho, alto):
+
+    ventana.update_idletasks()
+
+    pantalla_ancho = ventana.winfo_screenwidth()
+
+    x = (pantalla_ancho - ancho) // 2
+    y = 0  # Pegada al borde superior de la pantalla
+
+    ventana.geometry(
+        f"{ancho}x{alto}+{x}+{y}"
+    )
+
+
+# ============================================================
+# VENTANA RESULTADO
+# ============================================================
+
+def abrir_resultado(
+    parent,
+    batalla,
+    actualizar
+):
 
     (
         id_batalla,
@@ -732,24 +798,64 @@ def mostrar_batallas(contenedor):
 
     if batalla is None:
 
-        tk.Label(
-            principal,
-            text="BATALLAS",
-            font=("Segoe UI", 30, "bold"),
-            fg="#17202a",
-            bg="#f3f5f7"
-        ).pack(
-            pady=(80, 15)
-        )
+        # Mostrar el marcador agregado cuando termina la serie de tres finales.
+        conexion = conectar_bd()
+        cursor = conexion.cursor()
+        cursor.execute("""
+            SELECT COUNT(*), SUM(CASE WHEN estado = 'Completado' THEN 1 ELSE 0 END)
+            FROM enfrentamientos
+            WHERE etapa = 'Final'
+        """)
+        total_finales, finales_completadas = cursor.fetchone()
+        resultado_serie = None
+        if total_finales == 3 and finales_completadas == 3:
+            cursor.execute("""
+                SELECT e.ganador, COUNT(*) AS victorias, p.robot
+                FROM enfrentamientos e
+                JOIN participantes p ON p.id = e.ganador
+                WHERE e.etapa = 'Final' AND e.estado = 'Completado'
+                GROUP BY e.ganador, p.robot
+                ORDER BY victorias DESC
+            """)
+            victorias = cursor.fetchall()
+            if victorias:
+                ganador_serie, cantidad_victorias, robot_ganador = victorias[0]
+                cursor.execute("""
+                    SELECT COUNT(*) FROM enfrentamientos
+                    WHERE etapa = 'Final' AND estado = 'Completado'
+                      AND ganador != ?
+                """, (ganador_serie,))
+                derrotas = cursor.fetchone()[0]
+                resultado_serie = (robot_ganador, cantidad_victorias, derrotas)
+        conexion.close()
 
-        tk.Label(
-            principal,
-            text="No hay batallas pendientes",
-            font=("Segoe UI", 16),
-            fg="#68737d",
-            bg="#f3f5f7"
-        ).pack()
-
+        if resultado_serie:
+            robot_ganador, victorias_ganador, victorias_rival = resultado_serie
+            tk.Label(
+                principal, text="SERIE FINALIZADA",
+                font=("Segoe UI", 16, "bold"), fg="#68737d", bg="#f3f5f7"
+            ).pack(pady=(75, 12))
+            tk.Label(
+                principal, text="GANADOR DEL MEJOR DE 3",
+                font=("Segoe UI", 25, "bold"), fg="#166534", bg="#f3f5f7"
+            ).pack(pady=(0, 14))
+            tk.Label(
+                principal, text=robot_ganador,
+                font=("Segoe UI", 34, "bold"), fg="#17202a", bg="#f3f5f7"
+            ).pack(pady=(0, 12))
+            tk.Label(
+                principal, text=f"Marcador final: {victorias_ganador} - {victorias_rival}",
+                font=("Segoe UI", 20, "bold"), fg="#17202a", bg="#f3f5f7"
+            ).pack()
+        else:
+            tk.Label(
+                principal, text="BATALLAS",
+                font=("Segoe UI", 30, "bold"), fg="#17202a", bg="#f3f5f7"
+            ).pack(pady=(80, 15))
+            tk.Label(
+                principal, text="No hay batallas pendientes",
+                font=("Segoe UI", 16), fg="#68737d", bg="#f3f5f7"
+            ).pack()
         return
 
     (
