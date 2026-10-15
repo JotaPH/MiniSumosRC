@@ -4,7 +4,7 @@ import sqlite3
 import os
 import random
 
-from .llaves import obtener_tabla_clasificacion, generar_llaves_manualmente
+from .llaves import obtener_tabla_clasificacion, generar_llaves_manualmente, obtener_datos_llaves
 
 
 # ============================================================
@@ -844,6 +844,92 @@ def mostrar_enfrentamientos(contenedor):
         fill="y"
     )
 
+    # Cuadro eliminatorio visual, separado de la tabla de enfrentamientos.
+    marco_llaves = tk.Frame(marco_tabla, bg=BLANCO)
+    canvas_llaves = tk.Canvas(marco_llaves, bg=BLANCO, highlightthickness=0)
+    scroll_y_llaves = ttk.Scrollbar(marco_llaves, orient="vertical", command=canvas_llaves.yview)
+    scroll_x_llaves = ttk.Scrollbar(marco_llaves, orient="horizontal", command=canvas_llaves.xview)
+    canvas_llaves.configure(yscrollcommand=scroll_y_llaves.set, xscrollcommand=scroll_x_llaves.set)
+    canvas_llaves.grid(row=0, column=0, sticky="nsew")
+    scroll_y_llaves.grid(row=0, column=1, sticky="ns")
+    scroll_x_llaves.grid(row=1, column=0, sticky="ew")
+    marco_llaves.grid_rowconfigure(0, weight=1)
+    marco_llaves.grid_columnconfigure(0, weight=1)
+
+    def mostrar_tabla():
+        marco_llaves.pack_forget()
+        if not tabla.winfo_manager():
+            tabla.pack(side="left", fill="both", expand=True)
+        if not scrollbar.winfo_manager():
+            scrollbar.pack(side="right", fill="y")
+
+    def cargar_cuadro_llaves():
+        rondas = obtener_datos_llaves()
+        if not rondas:
+            return False
+        tabla.pack_forget()
+        scrollbar.pack_forget()
+        marco_llaves.pack(fill="both", expand=True)
+        canvas_llaves.delete("all")
+
+        ancho_tarjeta, alto_tarjeta = 220, 88
+        separacion_x, margen_x, margen_y = 72, 24, 48
+        cantidad_primera = len(rondas[0]["combates"])
+        alto_util = max(520, cantidad_primera * 132)
+        alto_total = alto_util + margen_y * 2
+        ancho_total = margen_x * 2 + len(rondas) * ancho_tarjeta + max(0, len(rondas)-1) * separacion_x
+        centros = []
+        for ronda in rondas:
+            cantidad = max(1, len(ronda["combates"]))
+            centros.append([margen_y + (i + 0.5) * alto_util / cantidad for i in range(cantidad)])
+
+        # Conectores antes de las tarjetas para que queden en el fondo.
+        for indice in range(len(rondas) - 1):
+            x1 = margen_x + indice * (ancho_tarjeta + separacion_x) + ancho_tarjeta
+            x2 = margen_x + (indice + 1) * (ancho_tarjeta + separacion_x)
+            xm = (x1 + x2) / 2
+            for j, y_destino in enumerate(centros[indice + 1]):
+                origenes = centros[indice][j*2:j*2+2]
+                if len(origenes) < 2:
+                    continue
+                for y_origen in origenes:
+                    canvas_llaves.create_line(x1, y_origen, xm, y_origen, xm, y_destino, x2, y_destino,
+                                              fill="#94A3B8", width=2)
+
+        for indice, ronda in enumerate(rondas):
+            x = margen_x + indice * (ancho_tarjeta + separacion_x)
+            canvas_llaves.create_text(x + ancho_tarjeta/2, 20, text=ronda["nombre"].upper(),
+                                      fill="#922b2b", font=("Arial", 11, "bold"), width=ancho_tarjeta)
+            for j, combate in enumerate(ronda["combates"]):
+                cy = centros[indice][j]
+                y1, y2 = cy - alto_tarjeta/2, cy + alto_tarjeta/2
+                canvas_llaves.create_rectangle(x, y1, x + ancho_tarjeta, y2,
+                                               fill="#F8FAFC", outline="#CBD5E1", width=1)
+                canvas_llaves.create_line(x, cy, x + ancho_tarjeta, cy, fill="#E2E8F0", width=1)
+                ganador = combate["ganador"]
+                filas_robot = (
+                    (combate["participante1"], combate["robot1"], combate["nombre1"], y1 + 21),
+                    (combate["participante2"], combate["robot2"], combate["nombre2"], cy + 22),
+                )
+                for pid, robot, persona, yy in filas_robot:
+                    color = "#334155"
+                    if pid is None:
+                        color = "#94A3B8"
+                    elif ganador is not None:
+                        color = "#15803D" if pid == ganador else "#94A3B8"
+                    canvas_llaves.create_text(x + 9, yy - 5, text=robot, anchor="w", fill=color,
+                                              font=("Arial", 10, "bold"), width=ancho_tarjeta - 18)
+                    canvas_llaves.create_text(x + 9, yy + 8, text=persona, anchor="w", fill="#64748B",
+                                              font=("Arial", 8), width=ancho_tarjeta - 18)
+                if combate["estado"] == "Completado":
+                    canvas_llaves.create_oval(x + ancho_tarjeta - 22, y1 + 5, x + ancho_tarjeta - 10, y1 + 17,
+                                              fill="#16A34A", outline="")
+                elif combate["estado"] == "En curso":
+                    canvas_llaves.create_text(x + ancho_tarjeta - 10, y1 + 11, text="●",
+                                              fill="#D97706", font=("Arial", 10, "bold"))
+        canvas_llaves.configure(scrollregion=(0, 0, ancho_total, alto_total))
+        return True
+
     # Botón para generar llaves manualmente después de revisar la clasificación.
     boton_llaves = ttk.Button(
         marco_botones, text="GENERAR LLAVES",
@@ -875,11 +961,11 @@ def mostrar_enfrentamientos(contenedor):
         filas = obtener_tabla_clasificacion()
         if filas is None:
             return False
-        columnas = ("Posición", "Robot", "Grupo", "Puntos", "Tiempo promedio", "% Ataques", "% Victorias", "Estado")
+        columnas = ("Posición", "Robot", "Grupo", "Puntos", "Tiempo promedio", "% Ataques", "% Victorias")
         configurar_tabla(
             columnas,
-            ("POS.", "ROBOT", "GRUPO", "PUNTOS", "TIEMPO PROM.", "% ATAQUES", "% VICTORIAS", "CLASIFICACIÓN"),
-            {"Posición": 70, "Robot": 190, "Grupo": 110, "Puntos": 90, "Tiempo promedio": 135, "% Ataques": 115, "% Victorias": 120, "Estado": 145}
+            ("POS.", "ROBOT", "GRUPO", "PUNTOS", "TIEMPO PROM.", "% ATAQUES", "% VICTORIAS"),
+            {"Posición": 70, "Robot": 220, "Grupo": 140, "Puntos": 110, "Tiempo promedio": 170, "% Ataques": 145, "% Victorias": 145}
         )
         tabla.tag_configure("clasifica", background="#DCFCE7", foreground="#166534")
         tabla.tag_configure("eliminado", background="#FEE2E2", foreground="#991B1B")
@@ -890,8 +976,7 @@ def mostrar_enfrentamientos(contenedor):
                     f'{fila["posicion_grupo"]}°', fila["robot"], fila["grupo"],
                     fila["puntos"], fila["tiempo_mostrar"],
                     f'{fila["porcentaje_ataques"]:.1f}%',
-                    f'{fila["porcentaje_victorias"]:.1f}%',
-                    "CLASIFICA" if fila["clasifica"] else "NO CLASIFICA"
+                    f'{fila["porcentaje_victorias"]:.1f}%'
                 ),
                 tags=("clasifica" if fila["clasifica"] else "eliminado",)
             )
@@ -929,13 +1014,11 @@ def mostrar_enfrentamientos(contenedor):
         enfrentamientos = obtener_enfrentamientos()
 
         if hay_llaves:
-            # Tras generar las llaves, mostrar exclusivamente rondas eliminatorias.
-            enfrentamientos = [e for e in enfrentamientos if e[1] not in ("Grupo", "Todos")]
-            columnas = ("ID", "Ronda", "Robot 1", "Robot 2", "Estado")
-            configurar_tabla(
-                columnas, ("ID", "RONDA", "ROBOT 1", "ROBOT 2", "ESTADO"),
-                {"ID": 70, "Ronda": 200, "Robot 1": 260, "Robot 2": 260, "Estado": 150}
-            )
+            # Mostrar el cuadro tradicional conectado en lugar de una tabla plana.
+            if cargar_cuadro_llaves():
+                boton_llaves.configure(state="disabled", text="LLAVES GENERADAS")
+                return
+            mostrar_tabla()
             boton_llaves.configure(state="disabled", text="LLAVES GENERADAS")
 
         elif cantidad <= 5 and todos_terminados and hay_final:
@@ -975,6 +1058,7 @@ def mostrar_enfrentamientos(contenedor):
             )
             boton_llaves.configure(state="disabled", text="NO SE REQUIEREN LLAVES")
 
+        mostrar_tabla()
         for fila in enfrentamientos:
             id_batalla, etapa, grupo, robot1, robot2, estado = fila
             if hay_llaves:
