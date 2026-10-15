@@ -901,6 +901,8 @@ def mostrar_enfrentamientos(contenedor):
             )
 
         # Dibujar conectores primero para dejarlos detrás de las tarjetas.
+        # Siempre se conserva el camino de ambos participantes: gris para la
+        # trayectoria del eliminado y verde para la trayectoria del ganador.
         for indice in range(len(rondas) - 1):
             x1 = margen_x + indice * (ancho_tarjeta + separacion_x) + ancho_tarjeta
             x2 = margen_x + (indice + 1) * (ancho_tarjeta + separacion_x)
@@ -908,28 +910,29 @@ def mostrar_enfrentamientos(contenedor):
             for j, combate in enumerate(rondas[indice]["combates"]):
                 y_p1 = posiciones_y[indice][j * 2]
                 y_p2 = posiciones_y[indice][j * 2 + 1]
+                y_union = (y_p1 + y_p2) / 2
                 y_destino = posiciones_y[indice + 1][j]
                 ganador = combate["ganador"]
-                color_linea = "#16A34A" if ganador is not None else "#94A3B8"
-                y_ganador = y_p1 if ganador == combate["participante1"] else y_p2
-                if ganador is not None:
-                    canvas_llaves.create_line(
-                        x1, y_ganador, xm, y_ganador, xm, y_destino, x2, y_destino,
-                        fill=color_linea, width=2
-                    )
-                else:
-                    canvas_llaves.create_line(
-                        x1, y_p1, xm, y_p1, xm, (y_p1 + y_p2) / 2,
-                        fill=color_linea, width=2
-                    )
-                    canvas_llaves.create_line(
-                        x1, y_p2, xm, y_p2, xm, (y_p1 + y_p2) / 2,
-                        fill=color_linea, width=2
-                    )
-                    canvas_llaves.create_line(
-                        xm, (y_p1 + y_p2) / 2, xm, y_destino, x2, y_destino,
-                        fill=color_linea, width=2
-                    )
+
+                # La rama de cada participante permanece visible hasta la unión.
+                color_p1 = "#16A34A" if ganador == combate["participante1"] else "#94A3B8"
+                color_p2 = "#16A34A" if ganador == combate["participante2"] else "#94A3B8"
+                canvas_llaves.create_line(
+                    x1, y_p1, xm, y_p1, xm, y_union,
+                    fill=color_p1, width=2
+                )
+                canvas_llaves.create_line(
+                    x1, y_p2, xm, y_p2, xm, y_union,
+                    fill=color_p2, width=2
+                )
+
+                # Desde la unión hasta el siguiente participante, la línea
+                # queda verde cuando ya se conoce al ganador; gris si está pendiente.
+                color_salida = "#16A34A" if ganador is not None else "#94A3B8"
+                canvas_llaves.create_line(
+                    xm, y_union, xm, y_destino, x2, y_destino,
+                    fill=color_salida, width=2
+                )
 
         # Dibujar una tarjeta individual por participante.
         for indice, ronda in enumerate(rondas):
