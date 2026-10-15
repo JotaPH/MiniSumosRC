@@ -972,12 +972,14 @@ def mostrar_batallas(contenedor):
                 font=("Segoe UI", 18, "bold"), fg="#17202a", bg="#f3f5f7"
             ).pack(pady=(95, 12))
             tk.Label(
-                principal, text="Preparando la final",
+                principal, text="CLASIFICACIÓN LISTA",
                 font=("Segoe UI", 27, "bold"), fg="#922b2b", bg="#f3f5f7"
             ).pack(pady=(0, 12))
             tk.Label(
-                principal, text="La final se mostrará aquí cuando esté lista.",
-                font=("Segoe UI", 15), fg="#475569", bg="#f3f5f7"
+                principal,
+                text="Visita Enfrentamientos para anunciar a los dos primeros\ny generar la batalla final.",
+                font=("Segoe UI", 15), fg="#475569", bg="#f3f5f7",
+                justify="center"
             ).pack()
         else:
             tk.Label(
