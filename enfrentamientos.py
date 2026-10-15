@@ -871,19 +871,25 @@ def mostrar_enfrentamientos(contenedor):
         tabla.pack_forget()
         scrollbar.pack_forget()
         marco_llaves.pack(fill="both", expand=True)
+        canvas_llaves.update_idletasks()
         canvas_llaves.delete("all")
 
-        # Cada participante ocupa su propio recuadro. Las dos tarjetas de un
-        # combate se conectan con la tarjeta del ganador en la ronda siguiente.
+        # Una tarjeta por participante y una columna final exclusiva para el campeón.
         ancho_tarjeta, alto_tarjeta = 176, 40
         separacion_x, margen_x, margen_y = 56, 22, 24
         separacion_y = 12
         cantidad_primera = max(1, len(rondas[0]["combates"]) * 2)
         alto_total = margen_y * 2 + cantidad_primera * (alto_tarjeta + separacion_y)
-        ancho_total = margen_x * 2 + len(rondas) * ancho_tarjeta + max(0, len(rondas) - 1) * separacion_x
 
-        # Cada ronda contiene dos tarjetas por combate; se distribuyen de
-        # forma uniforme para que los conectores formen una llave tradicional.
+        # Se reserva espacio para el recuadro del campeón, incluso mientras
+        # la final está pendiente.
+        columnas = len(rondas) + 1
+        ancho_total = margen_x * 2 + columnas * ancho_tarjeta + (columnas - 1) * separacion_x
+
+        # Si el cuadro cabe en la página, centrarlo horizontalmente.
+        ancho_visible = max(1, canvas_llaves.winfo_width())
+        desplazamiento_x = max(0, (ancho_visible - ancho_total) / 2)
+
         posiciones_y = []
         for ronda in rondas:
             cantidad_tarjetas = max(1, len(ronda["combates"]) * 2)
@@ -900,23 +906,27 @@ def mostrar_enfrentamientos(contenedor):
                 combate[f"nombre{lado}"]
             )
 
-        # Dibujar conectores primero para dejarlos detrás de las tarjetas.
-        # Siempre se conserva el camino de ambos participantes: gris para la
-        # trayectoria del eliminado y verde para la trayectoria del ganador.
+        # Conectores entre rondas. Se conservan ambas ramas: verde para quien
+        # gana y gris para quien queda eliminado.
         for indice in range(len(rondas) - 1):
-            x1 = margen_x + indice * (ancho_tarjeta + separacion_x) + ancho_tarjeta
-            x2 = margen_x + (indice + 1) * (ancho_tarjeta + separacion_x)
+            x1 = desplazamiento_x + margen_x + indice * (ancho_tarjeta + separacion_x) + ancho_tarjeta
+            x2 = desplazamiento_x + margen_x + (indice + 1) * (ancho_tarjeta + separacion_x)
             xm = (x1 + x2) / 2
             for j, combate in enumerate(rondas[indice]["combates"]):
                 y_p1 = posiciones_y[indice][j * 2]
                 y_p2 = posiciones_y[indice][j * 2 + 1]
                 y_union = (y_p1 + y_p2) / 2
-                y_destino = posiciones_y[indice + 1][j]
+                # Los dos ganadores de una ronda alimentan el mismo combate
+                # de la siguiente ronda.
+                indice_destino = (j // 2) * 2
+                y_destino = (
+                    posiciones_y[indice + 1][indice_destino]
+                    + posiciones_y[indice + 1][indice_destino + 1]
+                ) / 2
                 ganador = combate["ganador"]
 
-                # La rama de cada participante permanece visible hasta la unión.
-                color_p1 = "#16A34A" if ganador == combate["participante1"] else "#94A3B8"
-                color_p2 = "#16A34A" if ganador == combate["participante2"] else "#94A3B8"
+                color_p1 = "#16A34A" if ganador is not None and ganador == combate["participante1"] else "#94A3B8"
+                color_p2 = "#16A34A" if ganador is not None and ganador == combate["participante2"] else "#94A3B8"
                 canvas_llaves.create_line(
                     x1, y_p1, xm, y_p1, xm, y_union,
                     fill=color_p1, width=2
@@ -926,17 +936,15 @@ def mostrar_enfrentamientos(contenedor):
                     fill=color_p2, width=2
                 )
 
-                # Desde la unión hasta el siguiente participante, la línea
-                # queda verde cuando ya se conoce al ganador; gris si está pendiente.
                 color_salida = "#16A34A" if ganador is not None else "#94A3B8"
                 canvas_llaves.create_line(
                     xm, y_union, xm, y_destino, x2, y_destino,
                     fill=color_salida, width=2
                 )
 
-        # Dibujar una tarjeta individual por participante.
+        # Dibujar las tarjetas de cada ronda.
         for indice, ronda in enumerate(rondas):
-            x = margen_x + indice * (ancho_tarjeta + separacion_x)
+            x = desplazamiento_x + margen_x + indice * (ancho_tarjeta + separacion_x)
             for j, combate in enumerate(ronda["combates"]):
                 for lado in (1, 2):
                     pid, robot, persona = participante_de(combate, lado)
@@ -964,7 +972,7 @@ def mostrar_enfrentamientos(contenedor):
                         fill=fondo, outline=borde, width=1
                     )
                     canvas_llaves.create_text(
-                        x + 8, y - 6, text=robot, anchor="w",
+                        x + 8, y - 6, text=robot or "Por definir", anchor="w",
                         fill=color_texto, font=("Arial", 9, "bold"),
                         width=ancho_tarjeta - 16
                     )
@@ -985,7 +993,68 @@ def mostrar_enfrentamientos(contenedor):
                             fill="#D97706", font=("Arial", 9, "bold")
                         )
 
-        canvas_llaves.configure(scrollregion=(0, 0, ancho_total, alto_total))
+        # Recuadro final del campeón, conectado a los dos participantes de la
+        # final. El recorrido del campeón queda verde y el del otro finalista gris.
+        combate_final = rondas[-1]["combates"][-1] if rondas[-1]["combates"] else None
+        x_final = desplazamiento_x + margen_x + (len(rondas) - 1) * (ancho_tarjeta + separacion_x)
+        x_campeon = desplazamiento_x + margen_x + len(rondas) * (ancho_tarjeta + separacion_x)
+        y_campeon = (
+            posiciones_y[-1][0] + posiciones_y[-1][1]
+        ) / 2 if len(posiciones_y[-1]) >= 2 else alto_total / 2
+
+        if combate_final:
+            y_p1, y_p2 = posiciones_y[-1][0], posiciones_y[-1][1]
+            y_union = (y_p1 + y_p2) / 2
+            x_union = x_final + ancho_tarjeta + separacion_x / 2
+            ganador_id = combate_final["ganador"]
+
+            color_p1 = "#16A34A" if ganador_id is not None and ganador_id == combate_final["participante1"] else "#94A3B8"
+            color_p2 = "#16A34A" if ganador_id is not None and ganador_id == combate_final["participante2"] else "#94A3B8"
+            canvas_llaves.create_line(
+                x_final + ancho_tarjeta, y_p1, x_union, y_p1, x_union, y_union,
+                fill=color_p1, width=2
+            )
+            canvas_llaves.create_line(
+                x_final + ancho_tarjeta, y_p2, x_union, y_p2, x_union, y_union,
+                fill=color_p2, width=2
+            )
+            color_salida = "#16A34A" if ganador_id is not None else "#94A3B8"
+            canvas_llaves.create_line(
+                x_union, y_union, x_campeon, y_campeon,
+                fill=color_salida, width=2
+            )
+
+            if ganador_id is not None:
+                lado_ganador = 1 if ganador_id == combate_final["participante1"] else 2
+                _, robot_campeon, persona_campeon = participante_de(combate_final, lado_ganador)
+                texto_robot = robot_campeon or "Campeón"
+                texto_persona = persona_campeon or ""
+                fondo_campeon, borde_campeon, color_campeon = "#DCFCE7", "#16A34A", "#166534"
+            else:
+                texto_robot = "CAMPEÓN"
+                texto_persona = "Por definir"
+                fondo_campeon, borde_campeon, color_campeon = "#F8FAFC", "#CBD5E1", "#64748B"
+
+            y1, y2 = y_campeon - alto_tarjeta / 2, y_campeon + alto_tarjeta / 2
+            canvas_llaves.create_rectangle(
+                x_campeon, y1, x_campeon + ancho_tarjeta, y2,
+                fill=fondo_campeon, outline=borde_campeon, width=2
+            )
+            canvas_llaves.create_text(
+                x_campeon + 8, y_campeon - 6, text=texto_robot, anchor="w",
+                fill=color_campeon, font=("Arial", 9, "bold"),
+                width=ancho_tarjeta - 16
+            )
+            canvas_llaves.create_text(
+                x_campeon + 8, y_campeon + 10, text=texto_persona or "GANADOR DEL TORNEO",
+                anchor="w", fill=color_campeon, font=("Arial", 7),
+                width=ancho_tarjeta - 16
+            )
+
+        canvas_llaves.configure(
+            scrollregion=(0, 0, max(ancho_total, ancho_visible), alto_total)
+        )
+        canvas_llaves.xview_moveto(0)
         return True
 
     # Botón para generar llaves manualmente después de revisar la clasificación.
