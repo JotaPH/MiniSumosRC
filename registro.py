@@ -39,7 +39,7 @@ def confirmar_y_limpiar_competencia(accion, parent=None):
     except Exception as error:
         messagebox.showerror(
             "No se pudo verificar la competencia",
-            f"No se puede comprobar el estado de las batallas. No se realizó ningún cambio.\\n\\n{error}",
+            f"No se puede comprobar el estado de las batallas. No se realizó ningún cambio.\n\n{error}",
             parent=parent
         )
         return False
@@ -49,7 +49,7 @@ def confirmar_y_limpiar_competencia(accion, parent=None):
             "Reiniciar competencia",
             f"Hay una batalla en curso o completada. Si continúas para {accion}, "
             "se reiniciarán todas las batallas y sus resultados, y se generará "
-            "un nuevo calendario con los participantes actuales.\\n\\n¿Deseas continuar?",
+            "un nuevo calendario con los participantes actuales.\n\n¿Deseas continuar?",
             parent=parent
         )
         if not confirmar:
@@ -62,7 +62,7 @@ def confirmar_y_limpiar_competencia(accion, parent=None):
     except Exception as error:
         messagebox.showerror(
             "No se pudo reiniciar",
-            f"No se pudo limpiar el calendario anterior. No se realizó el cambio.\\n\\n{error}",
+            f"No se pudo limpiar el calendario anterior. No se realizó el cambio.\n\n{error}",
             parent=parent
         )
         return False
@@ -78,13 +78,13 @@ def regenerar_calendario_participantes(parent=None):
         if not exito:
             messagebox.showwarning(
                 "Calendario no generado",
-                f"{mensaje}\\n\\nLos participantes se guardaron, pero no hay un calendario nuevo.",
+                f"{mensaje}\n\nLos participantes se guardaron, pero no hay un calendario nuevo.",
                 parent=parent
             )
     except Exception as error:
         messagebox.showerror(
             "Error al generar calendario",
-            f"Los participantes se guardaron, pero no se pudo generar el calendario.\\n\\n{error}",
+            f"Los participantes se guardaron, pero no se pudo generar el calendario.\n\n{error}",
             parent=parent
         )
 
