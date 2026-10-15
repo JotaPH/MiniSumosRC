@@ -886,16 +886,18 @@ def mostrar_enfrentamientos(contenedor):
         columnas = len(rondas) + 1
         ancho_total = margen_x * 2 + columnas * ancho_tarjeta + (columnas - 1) * separacion_x
 
-        # Si el cuadro cabe en la página, centrarlo horizontalmente.
+        # Centrar el cuadro horizontal y verticalmente cuando quepa en el área visible.
         ancho_visible = max(1, canvas_llaves.winfo_width())
+        alto_visible = max(1, canvas_llaves.winfo_height())
         desplazamiento_x = max(0, (ancho_visible - ancho_total) / 2)
+        desplazamiento_y = max(0, (alto_visible - alto_total) / 2)
 
         posiciones_y = []
         for ronda in rondas:
             cantidad_tarjetas = max(1, len(ronda["combates"]) * 2)
             espacio = max(alto_total - margen_y * 2, cantidad_tarjetas * alto_tarjeta)
             posiciones_y.append([
-                margen_y + (i + 0.5) * espacio / cantidad_tarjetas
+                desplazamiento_y + margen_y + (i + 0.5) * espacio / cantidad_tarjetas
                 for i in range(cantidad_tarjetas)
             ])
 
@@ -916,13 +918,10 @@ def mostrar_enfrentamientos(contenedor):
                 y_p1 = posiciones_y[indice][j * 2]
                 y_p2 = posiciones_y[indice][j * 2 + 1]
                 y_union = (y_p1 + y_p2) / 2
-                # Los dos ganadores de una ronda alimentan el mismo combate
-                # de la siguiente ronda.
-                indice_destino = (j // 2) * 2
-                y_destino = (
-                    posiciones_y[indice + 1][indice_destino]
-                    + posiciones_y[indice + 1][indice_destino + 1]
-                ) / 2
+                # Cada combate alimenta una tarjeta distinta de la ronda siguiente.
+                # Así, dos semifinales llegan por separado a los dos finalistas,
+                # sin fusionar prematuramente las cuatro ramas en una sola línea.
+                y_destino = posiciones_y[indice + 1][j]
                 ganador = combate["ganador"]
 
                 color_p1 = "#16A34A" if ganador is not None and ganador == combate["participante1"] else "#94A3B8"
@@ -1052,9 +1051,15 @@ def mostrar_enfrentamientos(contenedor):
             )
 
         canvas_llaves.configure(
-            scrollregion=(0, 0, max(ancho_total, ancho_visible), alto_total)
+            scrollregion=(
+                0,
+                0,
+                max(ancho_total, ancho_visible),
+                max(alto_total + desplazamiento_y, alto_visible)
+            )
         )
         canvas_llaves.xview_moveto(0)
+        canvas_llaves.yview_moveto(0)
         return True
 
     # Botón para generar llaves manualmente después de revisar la clasificación.
