@@ -921,6 +921,7 @@ def mostrar_enfrentamientos(contenedor):
 
         # La clasificación se muestra solo al cerrar todos los combates de grupos.
         if cantidad >= 6 and grupos_terminados and not hay_llaves:
+            mostrar_tabla()
             if cargar_clasificacion():
                 boton_llaves.configure(state="normal", text="GENERAR LLAVES")
                 return
