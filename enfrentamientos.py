@@ -4,7 +4,7 @@ import sqlite3
 import os
 import random
 
-from .llaves import obtener_tabla_clasificacion, generar_llaves_manualmente, regenerar_llaves_manualmente, obtener_datos_llaves
+from .llaves import obtener_tabla_clasificacion, generar_llaves_manualmente, regenerar_llaves_manualmente, obtener_datos_llaves, generar_final_todos_manualmente
 
 
 # ============================================================
@@ -1145,7 +1145,7 @@ def mostrar_enfrentamientos(contenedor):
         if 3 <= cantidad <= 5 and todos_terminados and not hay_final:
             mostrar_tabla()
             if cargar_clasificacion():
-                boton_llaves.configure(state="disabled", text="FINAL AUTOMÁTICA")
+                boton_llaves.configure(state="normal", text="GENERAR FINAL")
                 return
 
         enfrentamientos = obtener_enfrentamientos()
@@ -1207,6 +1207,16 @@ def mostrar_enfrentamientos(contenedor):
             tabla.insert("", "end", values=valores)
 
     def generar_llaves():
+        participantes_actuales = obtener_participantes_validos()
+        if 3 <= len(participantes_actuales) <= 5:
+            exito, mensaje = generar_final_todos_manualmente()
+            if exito:
+                messagebox.showinfo("Final generada", mensaje, parent=contenedor.winfo_toplevel())
+                cargar_enfrentamientos()
+            else:
+                messagebox.showwarning("No se pudo generar la final", mensaje, parent=contenedor.winfo_toplevel())
+            return
+
         hay_llaves_actuales = bool(obtener_datos_llaves())
         if hay_llaves_actuales:
             confirmar = messagebox.askyesno(
