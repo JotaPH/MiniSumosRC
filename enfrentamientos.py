@@ -1136,11 +1136,16 @@ def mostrar_enfrentamientos(contenedor):
         grupos_terminados, hay_llaves = estado_fase_grupos()
         todos_terminados, hay_final, finales_pendientes = estado_fase_todos()
 
-        # La clasificación se muestra solo al cerrar todos los combates de grupos.
+        # Mostrar clasificación al terminar grupos (6+) o todos contra todos (3–5).
         if cantidad >= 6 and grupos_terminados and not hay_llaves:
             mostrar_tabla()
             if cargar_clasificacion():
                 boton_llaves.configure(state="normal", text="GENERAR LLAVES")
+                return
+        if 3 <= cantidad <= 5 and todos_terminados and not hay_final:
+            mostrar_tabla()
+            if cargar_clasificacion():
+                boton_llaves.configure(state="disabled", text="FINAL AUTOMÁTICA")
                 return
 
         enfrentamientos = obtener_enfrentamientos()
@@ -1148,10 +1153,10 @@ def mostrar_enfrentamientos(contenedor):
         if hay_llaves:
             # Mostrar el cuadro tradicional conectado en lugar de una tabla plana.
             if cargar_cuadro_llaves():
-                boton_llaves.configure(state="normal", text="REGENERAR LLAVES")
+                boton_llaves.configure(state="disabled", text="LLAVES EN CURSO")
                 return
             mostrar_tabla()
-            boton_llaves.configure(state="normal", text="REGENERAR LLAVES")
+            boton_llaves.configure(state="disabled", text="LLAVES EN CURSO")
 
         elif cantidad <= 5 and todos_terminados and hay_final:
             # Para 3–5 participantes, ocultar el todos-contra-todos una vez finalizado
