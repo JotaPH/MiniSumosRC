@@ -4,7 +4,7 @@ import sqlite3
 import os
 import random
 
-from .llaves import obtener_tabla_clasificacion, generar_llaves_manualmente, regenerar_llaves_manualmente, obtener_datos_llaves, generar_final_todos_manualmente
+from .llaves import obtener_tabla_clasificacion, generar_llaves_manualmente, obtener_datos_llaves, generar_final_todos_manualmente
 
 
 # ============================================================
@@ -1093,23 +1093,44 @@ def mostrar_enfrentamientos(contenedor):
         filas = obtener_tabla_clasificacion()
         if filas is None:
             return False
-        columnas = ("Posición", "Robot", "Grupo", "Puntos", "Tiempo promedio", "% Ataques", "% Victorias")
-        configurar_tabla(
-            columnas,
-            ("POS.", "ROBOT", "GRUPO", "PUNTOS", "TIEMPO PROM.", "% ATAQUES", "% VICTORIAS"),
-            {"Posición": 70, "Robot": 220, "Grupo": 140, "Puntos": 110, "Tiempo promedio": 170, "% Ataques": 145, "% Victorias": 145}
-        )
+
+        cantidad_participantes = len(obtener_participantes_validos())
+        if 3 <= cantidad_participantes <= 5:
+            # En todos contra todos no hay grupos: se omite esa columna.
+            columnas = ("Posición", "Robot", "Puntos", "Tiempo promedio", "% Ataques", "% Victorias")
+            configurar_tabla(
+                columnas,
+                ("POS.", "ROBOT", "PUNTOS", "TIEMPO PROM.", "% ATAQUES", "% VICTORIAS"),
+                {"Posición": 70, "Robot": 240, "Puntos": 110, "Tiempo promedio": 170, "% Ataques": 145, "% Victorias": 145}
+            )
+        else:
+            columnas = ("Posición", "Robot", "Grupo", "Puntos", "Tiempo promedio", "% Ataques", "% Victorias")
+            configurar_tabla(
+                columnas,
+                ("POS.", "ROBOT", "GRUPO", "PUNTOS", "TIEMPO PROM.", "% ATAQUES", "% VICTORIAS"),
+                {"Posición": 70, "Robot": 220, "Grupo": 140, "Puntos": 110, "Tiempo promedio": 170, "% Ataques": 145, "% Victorias": 145}
+            )
+
         tabla.tag_configure("clasifica", background="#DCFCE7", foreground="#166534")
         tabla.tag_configure("eliminado", background="#FEE2E2", foreground="#991B1B")
         for fila in filas:
-            tabla.insert(
-                "", "end",
-                values=(
+            if 3 <= cantidad_participantes <= 5:
+                valores = (
+                    f'{fila["posicion_grupo"]}°', fila["robot"],
+                    fila["puntos"], fila["tiempo_mostrar"],
+                    f'{fila["porcentaje_ataques"]:.1f}%',
+                    f'{fila["porcentaje_victorias"]:.1f}%'
+                )
+            else:
+                valores = (
                     f'{fila["posicion_grupo"]}°', fila["robot"], fila["grupo"],
                     fila["puntos"], fila["tiempo_mostrar"],
                     f'{fila["porcentaje_ataques"]:.1f}%',
                     f'{fila["porcentaje_victorias"]:.1f}%'
-                ),
+                )
+            tabla.insert(
+                "", "end",
+                values=valores,
                 tags=("clasifica" if fila["clasifica"] else "eliminado",)
             )
         return True
@@ -1203,7 +1224,8 @@ def mostrar_enfrentamientos(contenedor):
             elif cantidad >= 6:
                 valores = (id_batalla, grupo, robot1, robot2, estado)
             else:
-                valores = (id_batalla, etapa, robot1, robot2, estado)
+                etapa_mostrar = "Todos v Todos" if etapa == "Todos" else etapa
+                valores = (id_batalla, etapa_mostrar, robot1, robot2, estado)
             tabla.insert("", "end", values=valores)
 
     def generar_llaves():
@@ -1217,25 +1239,24 @@ def mostrar_enfrentamientos(contenedor):
                 messagebox.showwarning("No se pudo generar la final", mensaje, parent=contenedor.winfo_toplevel())
             return
 
-        hay_llaves_actuales = bool(obtener_datos_llaves())
-        if hay_llaves_actuales:
-            confirmar = messagebox.askyesno(
-                "Regenerar llaves",
-                "Se borrarán los resultados de las llaves eliminatorias y se volverán a crear desde la primera ronda. Los resultados de la fase de grupos se conservarán. ¿Continuar?",
+        if obtener_datos_llaves():
+            # La regeneración manual de llaves queda deshabilitada para evitar
+            # borrar accidentalmente resultados de una fase eliminatoria.
+            messagebox.showinfo(
+                "Llaves ya generadas",
+                "Las llaves eliminatorias ya están generadas.",
                 parent=contenedor.winfo_toplevel()
             )
-            if not confirmar:
-                return
-            exito, mensaje = regenerar_llaves_manualmente()
-        else:
-            confirmar = messagebox.askyesno(
-                "Generar llaves",
-                "Se calcularán los clasificados y se crearán los enfrentamientos de la primera ronda. ¿Continuar?",
-                parent=contenedor.winfo_toplevel()
-            )
-            if not confirmar:
-                return
-            exito, mensaje = generar_llaves_manualmente()
+            return
+
+        confirmar = messagebox.askyesno(
+            "Generar llaves",
+            "Se calcularán los clasificados y se crearán los enfrentamientos de la primera ronda. ¿Continuar?",
+            parent=contenedor.winfo_toplevel()
+        )
+        if not confirmar:
+            return
+        exito, mensaje = generar_llaves_manualmente()
         if exito:
             messagebox.showinfo("Llaves generadas", mensaje, parent=contenedor.winfo_toplevel())
             cargar_enfrentamientos()
