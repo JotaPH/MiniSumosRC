@@ -428,8 +428,8 @@ def actualizar_llaves_tras_resultado():
         total_todos = cursor.fetchone()[0]
         cursor.execute("SELECT COUNT(*) FROM enfrentamientos WHERE etapa = 'Todos' AND estado != 'Completado'")
         pendientes_todos = cursor.fetchone()[0]
-        if total_todos and not pendientes_todos:
-            _crear_final_todos(cursor)
+        # La final de 3–5 participantes se crea desde Enfrentamientos,
+        # después de que el organizador revise la tabla de clasificación.
         cursor.execute("SELECT COUNT(*) FROM llaves")
         if cursor.fetchone()[0]:
             _sincronizar_resultados_llaves(cursor)
@@ -479,5 +479,38 @@ def obtener_datos_llaves():
                 "nombre2": nombre2 or "",
             })
         return rondas
+    finally:
+        conexion.close()
+
+
+
+def generar_final_todos_manualmente():
+    """Crea la final entre los dos mejores tras revisar la clasificación."""
+    conexion = conectar()
+    try:
+        cursor = conexion.cursor()
+        cursor.execute("SELECT COUNT(*) FROM enfrentamientos WHERE etapa = 'Todos'")
+        total = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM enfrentamientos WHERE etapa = 'Todos' AND estado != 'Completado'")
+        pendientes = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM enfrentamientos WHERE etapa = 'Final'")
+        existe_final = cursor.fetchone()[0]
+        if not total or pendientes:
+            return False, "Aún hay batallas de todos contra todos pendientes."
+        if existe_final:
+            return False, "La final ya está generada."
+        clasificados = _obtener_clasificados(cursor)
+        if not clasificados or len(clasificados) < 2:
+            return False, "No se pudieron determinar los dos mejores participantes."
+        cursor.execute("""
+            INSERT INTO enfrentamientos
+                (etapa, grupo_id, participante1, participante2, estado, ronda)
+            VALUES ('Final', NULL, ?, ?, 'Pendiente', 1)
+        """, (clasificados[0][0], clasificados[1][0]))
+        conexion.commit()
+        return True, "Final generada entre los dos primeros de la clasificación."
+    except Exception as error:
+        conexion.rollback()
+        return False, f"No se pudo generar la final: {error}"
     finally:
         conexion.close()
