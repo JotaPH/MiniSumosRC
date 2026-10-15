@@ -798,60 +798,148 @@ def mostrar_batallas(contenedor):
 
     if batalla is None:
 
-        # Mostrar el marcador agregado cuando termina la serie de tres finales.
         conexion = conectar_bd()
         cursor = conexion.cursor()
-        cursor.execute("""
-            SELECT COUNT(*), SUM(CASE WHEN estado = 'Completado' THEN 1 ELSE 0 END)
-            FROM enfrentamientos
-            WHERE etapa = 'Final'
-        """)
-        total_finales, finales_completadas = cursor.fetchone()
-        resultado_serie = None
-        if total_finales == 3 and finales_completadas == 3:
+        campeon = None
+        marcador = None
+        subtitulo = "TORNEO FINALIZADO"
+
+        # Si hay cuadro eliminatorio, el último registro de llaves corresponde a la final.
+        cursor.execute("SELECT COUNT(*) FROM llaves")
+        hay_llaves = cursor.fetchone()[0] > 0
+        if hay_llaves:
             cursor.execute("""
-                SELECT e.ganador, COUNT(*) AS victorias, p.robot
-                FROM enfrentamientos e
-                JOIN participantes p ON p.id = e.ganador
-                WHERE e.etapa = 'Final' AND e.estado = 'Completado'
-                GROUP BY e.ganador, p.robot
-                ORDER BY victorias DESC
+                SELECT l.ganador, l.estado, p.robot, p.nombre
+                FROM llaves l
+                LEFT JOIN participantes p ON p.id = l.ganador
+                ORDER BY l.id DESC
+                LIMIT 1
             """)
-            victorias = cursor.fetchall()
-            if victorias:
-                ganador_serie, cantidad_victorias, robot_ganador = victorias[0]
+            final_llave = cursor.fetchone()
+            if final_llave and final_llave[0] is not None and final_llave[1] == "Completado":
+                campeon = (final_llave[2] or "Robot campeón", final_llave[3] or "")
+                subtitulo = "CAMPEÓN DE LAS LLAVES ELIMINATORIAS"
+
+        # Competencia de 2 participantes: serie programada de tres batallas.
+        if campeon is None:
+            cursor.execute("""
+                SELECT COUNT(*),
+                       SUM(CASE WHEN estado = 'Completado' THEN 1 ELSE 0 END)
+                FROM enfrentamientos
+                WHERE etapa = 'Final'
+            """)
+            total_finales, finales_completadas = cursor.fetchone()
+            finales_completadas = finales_completadas or 0
+
+            if total_finales == 3 and finales_completadas == 3:
                 cursor.execute("""
-                    SELECT COUNT(*) FROM enfrentamientos
-                    WHERE etapa = 'Final' AND estado = 'Completado'
-                      AND ganador != ?
-                """, (ganador_serie,))
-                derrotas = cursor.fetchone()[0]
-                resultado_serie = (robot_ganador, cantidad_victorias, derrotas)
+                    SELECT e.ganador, COUNT(*) AS victorias, p.robot, p.nombre
+                    FROM enfrentamientos e
+                    JOIN participantes p ON p.id = e.ganador
+                    WHERE e.etapa = 'Final' AND e.estado = 'Completado'
+                    GROUP BY e.ganador, p.robot, p.nombre
+                    ORDER BY victorias DESC
+                    LIMIT 1
+                """)
+                fila = cursor.fetchone()
+                if fila:
+                    campeon = (fila[2], fila[3])
+                    marcador = f"Serie final: {fila[1]} - {3 - fila[1]}"
+                    subtitulo = "CAMPEÓN • SERIE AL MEJOR DE 3"
+
+            # Final directa entre los dos mejores de todos contra todos.
+            elif total_finales == 1 and finales_completadas == 1:
+                cursor.execute("""
+                    SELECT p.robot, p.nombre
+                    FROM enfrentamientos e
+                    JOIN participantes p ON p.id = e.ganador
+                    WHERE e.etapa = 'Final' AND e.estado = 'Completado'
+                    LIMIT 1
+                """)
+                fila = cursor.fetchone()
+                if fila:
+                    campeon = (fila[0], fila[1])
+
+        # Al terminar grupos, la clasificación y el botón de llaves se gestionan
+        # desde la página Enfrentamientos.
+        cursor.execute("SELECT COUNT(*) FROM enfrentamientos WHERE etapa = 'Grupo'")
+        total_grupos = cursor.fetchone()[0]
+        cursor.execute("""
+            SELECT COUNT(*) FROM enfrentamientos
+            WHERE etapa = 'Grupo' AND estado != 'Completado'
+        """)
+        grupos_pendientes = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM enfrentamientos WHERE etapa = 'Todos'")
+        total_todos = cursor.fetchone()[0]
+        cursor.execute("""
+            SELECT COUNT(*) FROM enfrentamientos
+            WHERE etapa = 'Todos' AND estado != 'Completado'
+        """)
+        todos_pendientes = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM enfrentamientos WHERE etapa = 'Final'")
+        total_finales_actual = cursor.fetchone()[0]
         conexion.close()
 
-        if resultado_serie:
-            robot_ganador, victorias_ganador, victorias_rival = resultado_serie
+        if campeon:
             tk.Label(
-                principal, text="SERIE FINALIZADA",
+                principal, text="🏆", font=("Segoe UI Emoji", 42),
+                fg="#D97706", bg="#f3f5f7"
+            ).pack(pady=(48, 0))
+            tk.Label(
+                principal, text="TORNEO FINALIZADO",
                 font=("Segoe UI", 16, "bold"), fg="#68737d", bg="#f3f5f7"
-            ).pack(pady=(75, 12))
+            ).pack(pady=(4, 8))
             tk.Label(
-                principal, text="GANADOR DEL MEJOR DE 3",
-                font=("Segoe UI", 25, "bold"), fg="#166534", bg="#f3f5f7"
-            ).pack(pady=(0, 14))
+                principal, text=subtitulo,
+                font=("Segoe UI", 22, "bold"), fg="#166534", bg="#f3f5f7"
+            ).pack(pady=(0, 18))
             tk.Label(
-                principal, text=robot_ganador,
-                font=("Segoe UI", 34, "bold"), fg="#17202a", bg="#f3f5f7"
+                principal, text=campeon[0],
+                font=("Segoe UI", 36, "bold"), fg="#17202a", bg="#f3f5f7"
+            ).pack(pady=(0, 6))
+            tk.Label(
+                principal, text=campeon[1],
+                font=("Segoe UI", 20), fg="#475569", bg="#f3f5f7"
+            ).pack(pady=(0, 12))
+            if marcador:
+                tk.Label(
+                    principal, text=marcador,
+                    font=("Segoe UI", 15, "bold"), fg="#17202a", bg="#f3f5f7"
+                ).pack()
+        elif total_grupos > 0 and grupos_pendientes == 0 and not hay_llaves:
+            tk.Label(
+                principal, text="FASE DE GRUPOS FINALIZADA",
+                font=("Segoe UI", 18, "bold"), fg="#17202a", bg="#f3f5f7"
+            ).pack(pady=(95, 12))
+            tk.Label(
+                principal, text="Calculando clasificados",
+                font=("Segoe UI", 27, "bold"), fg="#922b2b", bg="#f3f5f7"
             ).pack(pady=(0, 12))
             tk.Label(
-                principal, text=f"Marcador final: {victorias_ganador} - {victorias_rival}",
-                font=("Segoe UI", 20, "bold"), fg="#17202a", bg="#f3f5f7"
+                principal,
+                text="Visita la página de Enfrentamientos para revisar la clasificación\ny generar las llaves eliminatorias.",
+                font=("Segoe UI", 15), fg="#475569", bg="#f3f5f7",
+                justify="center"
+            ).pack()
+        elif total_todos > 0 and todos_pendientes == 0 and total_finales_actual == 0:
+            tk.Label(
+                principal, text="FASE TODOS CONTRA TODOS FINALIZADA",
+                font=("Segoe UI", 18, "bold"), fg="#17202a", bg="#f3f5f7"
+            ).pack(pady=(95, 12))
+            tk.Label(
+                principal, text="Preparando la final",
+                font=("Segoe UI", 27, "bold"), fg="#922b2b", bg="#f3f5f7"
+            ).pack(pady=(0, 12))
+            tk.Label(
+                principal, text="La final se mostrará aquí cuando esté lista.",
+                font=("Segoe UI", 15), fg="#475569", bg="#f3f5f7"
             ).pack()
         else:
             tk.Label(
-                principal, text="BATALLAS",
+                principal, text="COMPETENCIA",
                 font=("Segoe UI", 30, "bold"), fg="#17202a", bg="#f3f5f7"
-            ).pack(pady=(80, 15))
+            ).pack(pady=(90, 15))
             tk.Label(
                 principal, text="No hay batallas pendientes",
                 font=("Segoe UI", 16), fg="#68737d", bg="#f3f5f7"
