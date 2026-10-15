@@ -389,6 +389,33 @@ def registrar_resultado(
         id_batalla
     ))
 
+    # En la serie al mejor de tres, cerrar automáticamente cuando un
+    # participante consiga dos victorias y eliminar la tercera pelea pendiente.
+    cursor.execute("""
+        SELECT participante1, participante2
+        FROM enfrentamientos
+        WHERE id = ? AND etapa = 'Final'
+    """, (id_batalla,))
+    serie = cursor.fetchone()
+    if serie:
+        p1, p2 = serie
+        cursor.execute("""
+            SELECT ganador, COUNT(*)
+            FROM enfrentamientos
+            WHERE etapa = 'Final'
+              AND participante1 = ? AND participante2 = ?
+              AND estado = 'Completado'
+            GROUP BY ganador
+        """, (p1, p2))
+        victorias = {fila[0]: fila[1] for fila in cursor.fetchall()}
+        if max(victorias.values(), default=0) >= 2:
+            cursor.execute("""
+                DELETE FROM enfrentamientos
+                WHERE etapa = 'Final'
+                  AND participante1 = ? AND participante2 = ?
+                  AND estado = 'Pendiente'
+            """, (p1, p2))
+
     conexion.commit()
     conexion.close()
 
@@ -397,8 +424,6 @@ def registrar_resultado(
     try:
         actualizar_llaves_tras_resultado()
     except Exception as error:
-        # El resultado ya quedó guardado; no bloquear la interfaz si falla
-        # la generación automática. El error queda visible en consola.
         print(f"Error al actualizar las llaves eliminatorias: {error}")
 
 
@@ -844,7 +869,7 @@ def mostrar_batallas(contenedor):
             total_finales, finales_completadas = cursor.fetchone()
             finales_completadas = finales_completadas or 0
 
-            if total_finales == 3 and finales_completadas == 3:
+            if total_finales >= 2 and finales_completadas == total_finales:
                 cursor.execute("""
                     SELECT e.ganador, COUNT(*) AS victorias, p.robot, p.nombre
                     FROM enfrentamientos e
@@ -857,7 +882,13 @@ def mostrar_batallas(contenedor):
                 fila = cursor.fetchone()
                 if fila:
                     campeon = (fila[2], fila[3])
-                    marcador = f"Serie final: {fila[1]} - {3 - fila[1]}"
+                    cursor.execute("""
+                        SELECT COUNT(*) FROM enfrentamientos
+                        WHERE etapa = 'Final' AND estado = 'Completado'
+                          AND ganador != ?
+                    """, (fila[0],))
+                    derrotas = cursor.fetchone()[0]
+                    marcador = f"Serie final: {fila[1]} - {derrotas}"
                     subtitulo = "CAMPEÓN • SERIE AL MEJOR DE 3"
 
             # Final directa entre los dos mejores de todos contra todos.
