@@ -22,6 +22,25 @@ conexion = sqlite3.connect(ruta_bd)
 cursor = conexion.cursor()
 
 
+def recalcular_competencia_si_no_hay_resultados():
+    """Actualiza el calendario tras cambios de participantes solo si aún no se jugó."""
+    try:
+        conexion_local = sqlite3.connect(ruta_bd)
+        cursor_local = conexion_local.cursor()
+        cursor_local.execute("""
+            SELECT COUNT(*) FROM enfrentamientos
+            WHERE estado = 'Completado'
+        """)
+        hay_resultados = cursor_local.fetchone()[0] > 0
+        conexion_local.close()
+        if hay_resultados:
+            return
+        from .enfrentamientos import preparar_competencia
+        preparar_competencia()
+    except Exception as error:
+        print(f"No se pudo recalcular automáticamente la competencia: {error}")
+
+
 # ============================================================
 # CREAR TABLA
 # ============================================================
@@ -1322,9 +1341,12 @@ def mostrar_registro(contenedor):
 
             conexion.commit()
 
+            # Al agregar un participante, regenerar el calendario automáticamente
+            # si la competencia todavía no tiene resultados registrados.
+            if not editando:
+                recalcular_competencia_si_no_hay_resultados()
 
             cargar_participantes()
-
             ventana_formulario.destroy()
 
 
@@ -1544,6 +1566,7 @@ def mostrar_registro(contenedor):
         conexion.commit()
 
 
+        recalcular_competencia_si_no_hay_resultados()
         cargar_participantes()
 
     # ========================================================
