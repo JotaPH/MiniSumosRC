@@ -19,11 +19,11 @@ Las rutas principales son `/`, `/battles`, `/attacks/1` y `/attacks/2`. No abras
   - **ATAQUES 1** y **ATAQUES 2**: conservan los contadores y ahora incluyen navegación a las demás vistas.
   - **BATALLAS · JUEZ**: nueva vista basada en `batallas.py`, con inicio y cuenta regresiva, pausa, continuar, finalizar con selección de ganador, próxima batalla, marcador, tiempo y controles de pantalla completa y menú.
   - **PARTICIPANTES**: formulario web con piloto, robot, peso máximo de 500 g y cinco requisitos reglamentarios; permite agregar, editar y eliminar participantes.
-  - **TABLAS · GANADORES / PERDEDORES**: incluye una prueba provisional de doble eliminación con participantes válidos de SQLite, botones “Gana R1” y “Gana R2”, índices de depuración a tres decimales y contador acumulado de combates.
+  - **TABLAS · GANADORES / PERDEDORES**: incluye una prueba provisional de doble eliminación con participantes válidos de SQLite, botones “Gana R1” y “Gana R2”, índices provisionales calculados por promedio a tres decimales, avance por rondas completas, byes alternados, contador acumulado y una consola visual que reproduce los mensajes de la simulación.
 
 ## Qué es funcional en este preview
 
-La pestaña TABLAS prepara el cuadro con los participantes válidos registrados, permite elegir provisionalmente el ganador de cada combate y muestra en tiempo real Winners, Lossers, ronda, byes, índices y combates acumulados. El estado de la prueba se guarda en SQLite para que la bandera de torneo iniciado pueda bloquear cambios en participantes.
+La pestaña TABLAS prepara el cuadro con los participantes válidos registrados, permite elegir provisionalmente el ganador de cada combate y muestra en tiempo real Winners, Lossers, ronda, byes, índices y combates acumulados. La planificación trabaja por rondas completas: con 10 participantes la secuencia prevista es Winners 1, Winners 2, Lossers 1, Winners 3, Lossers 2, Winners 4 y las rondas finales de Lossers. Los byes avanzan sin contarse como combates. El panel CONSOLA DE SIMULACIÓN muestra separadores, tablas, avances e historial acumulado. El estado de la prueba se guarda en SQLite para que la bandera de torneo iniciado pueda bloquear cambios en participantes.
 
 ## Alcance y limitaciones
 
