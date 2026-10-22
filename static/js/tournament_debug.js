@@ -368,4 +368,17 @@
   }
   document.addEventListener("DOMContentLoaded", init);
   if (document.readyState !== "loading") init();
+  window.setInterval(async () => {
+    if (!tournament || !tournament.started) return;
+    try {
+      const response = await fetch("/api/tournament/debug-state");
+      if (!response.ok) return;
+      const data = await response.json();
+      if (!data.started) {
+        await refreshParticipants();
+        tournament = freshState();
+        render();
+      }
+    } catch (_) {}
+  }, 1500);
 })();
