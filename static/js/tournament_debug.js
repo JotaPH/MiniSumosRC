@@ -358,7 +358,27 @@
     if (!response.ok) throw new Error("No se pudo consultar el estado del torneo.");
     const data = await response.json();
     tournament = data.state;
-    if (!tournament || !Array.isArray(tournament.players)) tournament = freshState();
+    if (!tournament || !Array.isArray(tournament.players)) {
+      tournament = freshState();
+    } else if (!Array.isArray(tournament.logs) || !tournament.dropsByW) {
+      // El estado guardado por la versión anterior no contiene las colas necesarias
+      // para respetar las rondas completas. Reiniciar únicamente la prueba provisional.
+      const wasStarted = !!tournament.started;
+      await refreshParticipants();
+      tournament = freshState();
+      if (wasStarted && participants.length >= 2) {
+        tournament.started = true;
+        tournament.phase = "running";
+        tournament.logs = [];
+        tournament.dropsByW = {};
+        separator("PRUEBA REINICIADA POR ACTUALIZACIÓN DE LA SIMULACIÓN");
+        logLine("Se reinició el estado provisional para aplicar el orden correcto de rondas.", "system");
+        beginRound("W", true);
+        await persist();
+      } else {
+        tournament.logs = [{message:"Estado provisional actualizado. Pulsa Iniciar torneo para comenzar.",kind:"system"}];
+      }
+    }
     render();
   }
 
