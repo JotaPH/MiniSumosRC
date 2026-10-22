@@ -35,6 +35,19 @@ def ensure_participants_schema(connection):
             connection.execute(f"ALTER TABLE participantes ADD COLUMN {name} {definition}")
     connection.commit()
 
+def ensure_tournament_schema(connection):
+    connection.execute("""
+        CREATE TABLE IF NOT EXISTS torneo_debug (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            iniciado INTEGER NOT NULL DEFAULT 0,
+            estado_json TEXT NOT NULL DEFAULT ''
+        )
+    """)
+    connection.execute(
+        "INSERT OR IGNORE INTO torneo_debug (id, iniciado, estado_json) VALUES (1, 0, '')"
+    )
+    connection.commit()
+
 def db_connect():
     if not DB_PATH.is_file():
         raise FileNotFoundError(
@@ -45,6 +58,7 @@ def db_connect():
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
     ensure_participants_schema(connection)
+    ensure_tournament_schema(connection)
     return connection
 
 def table_exists(connection, table_name):
@@ -60,13 +74,15 @@ def competition_has_data(connection):
             count = connection.execute('SELECT COUNT(*) FROM "' + table + '"').fetchone()[0]
             if count:
                 return True
-    return False
+    row = connection.execute("SELECT iniciado FROM torneo_debug WHERE id=1").fetchone()
+    return bool(row and row["iniciado"])
 
 def clear_competition_data(connection):
     for table in ("enfrentamientos", "historial_batallas", "clasificacion",
                   "llaves", "grupo_participantes", "grupos"):
         if table_exists(connection, table):
             connection.execute('DELETE FROM "' + table + '"')
+    connection.execute("UPDATE torneo_debug SET iniciado=0, estado_json='' WHERE id=1")
     if table_exists(connection, "sqlite_sequence"):
         connection.execute(
             "DELETE FROM sqlite_sequence WHERE name IN ('enfrentamientos', 'historial_batallas')"
@@ -273,6 +289,41 @@ def delete_participant(participant_id):
         return jsonify({"message": "Participante eliminado de SQLite."})
     except (OSError, sqlite3.Error) as error:
         return jsonify({"error": f"No se pudo eliminar el participante: {error}"}), 503
+
+@app.get("/api/tournament/debug-state")
+def get_tournament_debug_state():
+    try:
+        with closing(db_connect()) as connection:
+            row = connection.execute(
+                "SELECT iniciado, estado_json FROM torneo_debug WHERE id=1"
+            ).fetchone()
+        state_data = json.loads(row["estado_json"]) if row and row["estado_json"] else None
+        return jsonify({"started": bool(row and row["iniciado"]), "state": state_data})
+    except (OSError, sqlite3.Error, json.JSONDecodeError) as error:
+        return jsonify({"error": f"No se pudo consultar el estado del torneo: {error}"}), 503
+
+@app.post("/api/tournament/debug-state")
+def save_tournament_debug_state():
+    payload = request.get_json(silent=True) or {}
+    try:
+        with closing(db_connect()) as connection, connection:
+            if payload.get("reset"):
+                connection.execute(
+                    "UPDATE torneo_debug SET iniciado=0, estado_json='' WHERE id=1"
+                )
+                return jsonify({"started": False, "state": None})
+            state_data = payload.get("state")
+            if not isinstance(state_data, dict):
+                return jsonify({"error": "El estado del torneo no es válido."}), 400
+            encoded = json.dumps(state_data, ensure_ascii=False, separators=(",", ":"))
+            started = 1 if state_data.get("started") else 0
+            connection.execute(
+                "UPDATE torneo_debug SET iniciado=?, estado_json=? WHERE id=1",
+                (started, encoded)
+            )
+        return jsonify({"started": bool(started), "state": state_data})
+    except (OSError, sqlite3.Error) as error:
+        return jsonify({"error": f"No se pudo guardar el estado del torneo: {error}"}), 503
 
 @app.get("/api/matches")
 def list_matches():
