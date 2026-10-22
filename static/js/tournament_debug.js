@@ -159,62 +159,7 @@
     return null;
   }
 
-    function preparePairs(ids, direction, byeSide, initial) {
-    const sorted = ids.map(player).filter(Boolean).sort((a,b) => a.index-b.index);
-    if (initial) {
-      const n = sorted.length;
-      let capacity = 1;
-      while (capacity < n) capacity *= 2;
-      const byes = capacity - n;
-      const matchCount = Math.floor((n - byes) / 2);
-      const pool = sorted.slice(0, matchCount * 2);
-      return {
-        pairs: Array.from({length:matchCount}, (_,i) => [pool[i*2].id,pool[i*2+1].id]),
-        byeIds: sorted.slice(matchCount*2).map(p=>p.id),
-        byeOccurred: byes > 0
-      };
-    }
-    let pool = sorted.slice();
-    let byeIds = [];
-    if (pool.length % 2) {
-      const bye = byeSide === "high" ? pool.pop() : pool.shift();
-      byeIds = bye ? [bye.id] : [];
-    }
-    if (direction === "desc") pool.reverse();
-    const pairs = [];
-    for (let i=0;i+1<pool.length;i+=2) pairs.push([pool[i].id,pool[i+1].id]);
-    return {pairs,byeIds,byeOccurred:byeIds.length>0};
-  }
-
-  function beginRound(type, initial) {
-    const ids = type === "W" ? tournament.winners : tournament.losers;
-    const prepared = preparePairs(ids, tournament.direction, tournament.byeSide, !!initial);
-    tournament.roundType = type;
-    if (type === "W") tournament.wRound += 1;
-    else tournament.lRound += 1;
-    tournament.round = {
-      type:type, number:type === "W" ? tournament.wRound : tournament.lRound,
-      pairs:prepared.pairs, byeIds:prepared.byeIds, position:0, initial:!!initial
-    };
-    tournament.current = null;
-    if (initial) tournament.byeSide = "low";
-    else if (prepared.byeOccurred) tournament.byeSide = tournament.byeSide === "high" ? "low" : "high";
-    tournament.current = nextPair();
-    if (!tournament.current) afterRound();
-  }
-
-  function nextPair() {
-    if (!tournament.round) return null;
-    while (tournament.round.position < tournament.round.pairs.length) {
-      const pair = tournament.round.pairs[tournament.round.position];
-      const a = player(pair[0]), b = player(pair[1]);
-      if (a && b && !tournament.eliminated.includes(a.id) && !tournament.eliminated.includes(b.id)) return {a:a.id,b:b.id,type:"match"};
-      tournament.round.position += 1;
-    }
-    return null;
-  }
-
-  function startFinal() {
+    function startFinal() {
     if (tournament.winners.length === 1 && tournament.losers.length === 1) {
       tournament.phase = "final";
       tournament.finalNo = 1;
