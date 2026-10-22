@@ -116,7 +116,8 @@
       pairs:prepared.pairs, byeIds:prepared.byeIds, position:0, initial:!!initial
     };
     tournament.current = null;
-    if (prepared.byeOccurred && !initial) tournament.byeSide = tournament.byeSide === "high" ? "low" : "high";
+    if (initial) tournament.byeSide = "low";
+    else if (prepared.byeOccurred) tournament.byeSide = tournament.byeSide === "high" ? "low" : "high";
     tournament.current = nextPair();
     if (!tournament.current) afterRound();
   }
