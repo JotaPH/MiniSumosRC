@@ -444,6 +444,7 @@
           logLine(loser.robot + " queda eliminado (segunda derrota).");
         }
         tournament.round.position += 1;
+        logTables();
         tournament.current = nextPair();
         if (!tournament.current) afterRound();
       }
